@@ -1,0 +1,64 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+.env
+!.env.example
+.agents/
+.codex/
+
+.ipynb_checkpoints/
+
+data/*
+!data/.gitignore
+!data/**/
+!data/**/.gitkeep
+
+models/**/*.pt
+models/**/*.joblib
+models/ocr_eval*/
+models/ocr_hog_svm_improved/
+models/yolo_runs/
+*.pt
+!models/ocr_hog_svm/metadata.json
+!models/ocr_hog_svm/char_classes.json
+
+# Notebook artifacts
+notebooks/runs/
+notebooks/lpr_demo/models/
+notebooks/*.pt
+
+results/*
+!results/.gitkeep
+
+lpr_demo/debug_outputs*/
+lpr_demo/input_images/image*.png
+
+*.zip
+*.pptx
+*.pdf
+
+# Docker volumes
+postgres_data/
+minio_data/
+prometheus_data/
+grafana_data/
+
+# MLflow
+mlruns/
+mlflow_data/
+
+# Responsible AI outputs
+responsible_ai/results/
+
+# Coverage
+coverage.xml
+htmlcov/
+.coverage
+
+# IDE
+.idea/
+.vscode/
+*.swp

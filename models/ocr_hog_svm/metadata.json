@@ -1,0 +1,57 @@
+{
+  "char_classes": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "K",
+    "L",
+    "M",
+    "N",
+    "P",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "X",
+    "Y",
+    "Z"
+  ],
+  "feature_method": "hog",
+  "classifier": "svm",
+  "metrics": {
+    "accuracy": 0.9272952853598014,
+    "macro_f1": 0.9311963798651146,
+    "n_train": 16120,
+    "n_test": 4030,
+    "synthetic_per_class": 250,
+    "emnist_per_class": 0,
+    "plate_style_synthetic_per_class": 400
+  },
+  "char_size": 32,
+  "hog_pixels_per_cell": [
+    4,
+    4
+  ],
+  "hog_cells_per_block": [
+    2,
+    2
+  ],
+  "hog_orientations": 9,
+  "feature_dim": 1764
+}

@@ -1,0 +1,6 @@
+*
+!.gitignore
+!characters/
+!plates/
+!characters/.gitkeep
+!plates/.gitkeep

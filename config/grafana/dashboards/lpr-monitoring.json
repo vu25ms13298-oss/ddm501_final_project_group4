@@ -1,0 +1,158 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "API Requests per Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "rate(api_requests_total[1m])",
+          "legendFormat": "{{method}} {{endpoint}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Prediction Latency (p50, p95, p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(model_prediction_latency_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(model_prediction_latency_seconds_bucket[5m]))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Total Predictions by Plate Type",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "model_predictions_total",
+          "legendFormat": "{{plate_type}}"
+        }
+      ]
+    },
+    {
+      "title": "Prediction Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "rate(model_prediction_errors_total[5m])",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "errors/s" },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Detection Confidence Distribution",
+      "type": "histogram",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "detection_confidence_bucket",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "title": "Characters Detected per Plate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(plate_char_count_bucket[5m]))",
+          "legendFormat": "median chars"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(plate_char_count_bucket[5m]))",
+          "legendFormat": "p95 chars"
+        }
+      ]
+    },
+    {
+      "title": "API Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "up{job=\"lpr-api\"}",
+          "legendFormat": "API Status"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" } }, "type": "value" },
+            { "options": { "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Model Info",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "model_info",
+          "legendFormat": "{{model_name}} ({{feature_method}} + {{classifier}})"
+        }
+      ]
+    },
+    {
+      "title": "Request Latency Heatmap",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "targets": [
+        {
+          "expr": "rate(api_request_latency_seconds_bucket[5m])",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["lpr", "ml-monitoring"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "LPR System Monitoring",
+  "uid": "lpr-monitoring",
+  "version": 1
+}

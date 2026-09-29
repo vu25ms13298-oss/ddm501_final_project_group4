@@ -1,0 +1,39 @@
+# Core ML pipeline
+ultralytics
+torch
+torchvision
+scikit-learn
+scikit-image
+opencv-python-headless
+matplotlib
+seaborn
+pillow
+tqdm
+joblib
+pywavelets
+pandas
+numpy
+
+# API
+fastapi
+uvicorn
+python-multipart
+prometheus-client
+pydantic
+
+# MLflow
+mlflow
+boto3
+
+# Responsible AI
+shap
+lime
+
+# Testing
+pytest
+pytest-cov
+httpx
+
+# Code quality
+ruff
+black

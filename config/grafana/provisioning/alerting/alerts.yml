@@ -1,0 +1,202 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: api_alerts
+    folder: LPR Alerts
+    interval: 1m
+    rules:
+      - uid: api-high-error-rate
+        title: API High Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-datasource
+            model:
+              expr: rate(model_prediction_errors_total[5m])
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0.1]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              refId: C
+              type: classic_conditions
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prediction error rate exceeds threshold
+
+      - uid: api-high-latency
+        title: API High Latency
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-datasource
+            model:
+              expr: histogram_quantile(0.95, rate(api_request_latency_seconds_bucket[5m]))
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              refId: C
+              type: classic_conditions
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency exceeds 5 seconds
+
+      - uid: api-down
+        title: API Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus-datasource
+            model:
+              expr: up{job="lpr-api"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              refId: C
+              type: classic_conditions
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: LPR API service is unreachable
+
+  - orgId: 1
+    name: model_alerts
+    folder: LPR Alerts
+    interval: 5m
+    rules:
+      - uid: model-high-latency
+        title: Model Prediction Latency Spike
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-datasource
+            model:
+              expr: histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m]))
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [3]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              refId: C
+              type: classic_conditions
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Model inference p95 latency exceeds 3 seconds
+
+      - uid: low-char-detection
+        title: Low Character Detection
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus-datasource
+            model:
+              expr: histogram_quantile(0.5, rate(plate_char_count_bucket[10m]))
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              refId: C
+              type: classic_conditions
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Median characters detected per plate is below 5

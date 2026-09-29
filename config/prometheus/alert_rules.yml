@@ -1,0 +1,78 @@
+groups:
+  - name: api_alerts
+    rules:
+      - alert: APIHighErrorRate
+        expr: rate(model_prediction_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High prediction error rate"
+          description: "Prediction error rate is {{ $value }} errors/sec over the last 5 minutes."
+
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(api_request_latency_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency (p95 > 5s)"
+          description: "95th percentile latency is {{ $value }}s."
+
+      - alert: APIDown
+        expr: up{job="lpr-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LPR API is down"
+          description: "The LPR API service has been unreachable for more than 1 minute."
+
+  - name: model_alerts
+    rules:
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model prediction latency is high"
+          description: "95th percentile model prediction latency is {{ $value }}s."
+
+      - alert: LowCharacterDetection
+        expr: histogram_quantile(0.5, rate(plate_char_count_bucket[10m])) < 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low character detection rate"
+          description: "Median characters detected per plate is below 5, indicating possible quality issues."
+
+      - alert: LowDetectionConfidence
+        expr: histogram_quantile(0.5, rate(detection_confidence_bucket[10m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low YOLO detection confidence"
+          description: "Median detection confidence is {{ $value }}, below 0.5 threshold."
+
+      - alert: NoPredictions
+        expr: rate(model_predictions_total[15m]) == 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "No predictions in the last 30 minutes"
+          description: "The API has not received any prediction requests."
+
+  - name: system_alerts
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} is down"
+          description: "Target {{ $labels.instance }} has been down for more than 2 minutes."
