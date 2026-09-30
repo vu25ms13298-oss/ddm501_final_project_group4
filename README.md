@@ -1,6 +1,6 @@
 # License Plate Recognition — End-to-End ML System
 
-[![CI Pipeline](https://github.com/YOUR_ORG/license-plate-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/license-plate-recognition/actions)
+[![CI Pipeline](https://github.com/vu25ms13298-oss/ddm501_final_project_group4/actions/workflows/ci.yml/badge.svg)](https://github.com/vu25ms13298-oss/ddm501_final_project_group4/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-compose-blue.svg)](https://docs.docker.com/compose/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -107,7 +107,7 @@ The system is deployed as a REST API with full MLOps infrastructure: experiment 
 ### 1. Clone and Start Services
 
 ```bash
-git clone https://github.com/YOUR_ORG/license-plate-recognition.git
+git clone https://github.com/vu25ms13298-oss/ddm501_final_project_group4.git
 cd license-plate-recognition
 docker compose up -d --build
 ```

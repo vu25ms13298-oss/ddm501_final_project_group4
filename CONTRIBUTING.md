@@ -75,7 +75,7 @@ docs: update ARCHITECTURE.md with data flow diagram
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_ORG/license-plate-recognition.git
+git clone https://github.com/vu25ms13298-oss/ddm501_final_project_group4.git
 cd license-plate-recognition
 
 # Create virtual environment
