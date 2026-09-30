@@ -42,7 +42,11 @@ def _binary_component_score(binary_img):
     h, w = binary_img.shape
     mx = int(w * 0.02)
     my = int(h * 0.08)
-    inner = binary_img[my:h - my, mx:w - mx] if h - 2 * my > 5 and w - 2 * mx > 5 else binary_img
+    inner = (
+        binary_img[my : h - my, mx : w - mx]
+        if h - 2 * my > 5 and w - 2 * mx > 5
+        else binary_img
+    )
     H, W = inner.shape
     num_labels, _, stats, _ = cv2.connectedComponentsWithStats(inner, connectivity=8)
 
@@ -104,13 +108,19 @@ def preprocess_plate_candidates(plate_img):
 
     raw_candidates = []
     for name, img in (("gray", gray), ("enhanced", enhanced)):
-        for mode_name, mode in (("light", cv2.THRESH_BINARY), ("dark", cv2.THRESH_BINARY_INV)):
+        for mode_name, mode in (
+            ("light", cv2.THRESH_BINARY),
+            ("dark", cv2.THRESH_BINARY_INV),
+        ):
             _, binary = cv2.threshold(img, 0, 255, mode + cv2.THRESH_OTSU)
             raw_candidates.append((f"{name}_{mode_name}_otsu", binary))
 
     block = _odd_at_least(min(h, w) * 0.16, 21)
     block = min(block, _odd_at_least(min(h, w) - 2, 21)) if min(h, w) > 25 else 21
-    for mode_name, mode in (("light", cv2.THRESH_BINARY), ("dark", cv2.THRESH_BINARY_INV)):
+    for mode_name, mode in (
+        ("light", cv2.THRESH_BINARY),
+        ("dark", cv2.THRESH_BINARY_INV),
+    ):
         binary = cv2.adaptiveThreshold(
             enhanced,
             255,
@@ -127,14 +137,18 @@ def preprocess_plate_candidates(plate_img):
         window = _odd_at_least(min(h, w) * 0.22, 25)
         if window < min(h, w):
             sauvola = threshold_sauvola(enhanced, window_size=window, k=0.18)
-            raw_candidates.append((
-                "enhanced_light_sauvola",
-                ((enhanced > sauvola) * 255).astype(np.uint8),
-            ))
-            raw_candidates.append((
-                "enhanced_dark_sauvola",
-                ((enhanced < sauvola) * 255).astype(np.uint8),
-            ))
+            raw_candidates.append(
+                (
+                    "enhanced_light_sauvola",
+                    ((enhanced > sauvola) * 255).astype(np.uint8),
+                )
+            )
+            raw_candidates.append(
+                (
+                    "enhanced_dark_sauvola",
+                    ((enhanced < sauvola) * 255).astype(np.uint8),
+                )
+            )
     except Exception:
         pass
 
@@ -168,10 +182,10 @@ def preprocess_plate_candidates(plate_img):
 def preprocess_plate(plate_img):
     """
     Tiền xử lý ảnh biển số: grayscale + binarize.
-    
+
     Args:
         plate_img: np.array (RGB or grayscale plate crop)
-        
+
     Returns:
         tuple: (gray_image, binary_image)
     """
@@ -193,9 +207,7 @@ def preprocess_plate_legacy(plate_img):
     thresh_val, binary_normal = cv2.threshold(
         gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
-    _, binary_inv = cv2.threshold(
-        gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-    )
+    _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     dark_pixels = gray[gray < thresh_val]
     mean_dark = float(np.mean(dark_pixels)) if dark_pixels.size else 255.0
@@ -204,12 +216,15 @@ def preprocess_plate_legacy(plate_img):
 
     binary = (
         heuristic_binary
-        if _binary_component_score(heuristic_binary) >= _binary_component_score(other_binary)
+        if _binary_component_score(heuristic_binary)
+        >= _binary_component_score(other_binary)
         else other_binary
     )
     flipped = cv2.bitwise_not(binary)
     fill = float(np.count_nonzero(binary)) / binary.size
-    if fill > 0.60 and _binary_component_score(flipped) >= _binary_component_score(binary):
+    if fill > 0.60 and _binary_component_score(flipped) >= _binary_component_score(
+        binary
+    ):
         binary = flipped
 
     return gray, _close_binary(binary)
@@ -218,10 +233,10 @@ def preprocess_plate_legacy(plate_img):
 def split_two_lines(binary):
     """
     Tách biển 2-dòng thành 2 phần dựa trên horizontal projection.
-    
+
     Args:
         binary: np.array (binary plate image)
-        
+
     Returns:
         tuple: (upper_line_image, lower_line_image)
     """
@@ -237,8 +252,12 @@ def split_two_lines(binary):
     return binary[:valley, :], binary[valley:, :]
 
 
-def segment_characters(binary_line, char_min_width_ratio=0.02, char_max_width_ratio=0.3,
-                       char_min_height_ratio=0.3):
+def segment_characters(
+    binary_line,
+    char_min_width_ratio=0.02,
+    char_max_width_ratio=0.3,
+    char_min_height_ratio=0.3,
+):
     """
     Tách ký tự khỏi một dòng (binary image) bằng connected components.
 
@@ -253,7 +272,9 @@ def segment_characters(binary_line, char_min_width_ratio=0.02, char_max_width_ra
     """
     H, W = binary_line.shape
     # Connected components để có boxes chính xác hơn projection thuần
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_line, connectivity=8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        binary_line, connectivity=8
+    )
 
     chars = []
     for i in range(1, num_labels):  # Bỏ qua background (label 0)
@@ -265,7 +286,7 @@ def segment_characters(binary_line, char_min_width_ratio=0.02, char_max_width_ra
             continue
         if area < 30:
             continue
-        char_img = binary_line[y:y + h, x:x + w]
+        char_img = binary_line[y : y + h, x : x + w]
         chars.append({"img": char_img, "bbox": (x, y, w, h)})
 
     # Sắp xếp theo tọa độ x (trái → phải)
@@ -273,8 +294,9 @@ def segment_characters(binary_line, char_min_width_ratio=0.02, char_max_width_ra
     return chars
 
 
-def segment_characters_by_projection(binary_line, min_width_ratio=0.012,
-                                      max_width_ratio=0.18, min_height_ratio=0.28):
+def segment_characters_by_projection(
+    binary_line, min_width_ratio=0.012, max_width_ratio=0.18, min_height_ratio=0.28
+):
     """
     Split a one-line plate by vertical projection.
 
@@ -306,7 +328,7 @@ def segment_characters_by_projection(binary_line, min_width_ratio=0.012,
         w = x2 - x1 + 1
         if w < W * min_width_ratio or w > W * max_width_ratio:
             continue
-        patch = binary_line[:, x1:x2 + 1]
+        patch = binary_line[:, x1 : x2 + 1]
         ys, xs = np.where(patch > 0)
         if len(xs) == 0:
             continue
@@ -319,7 +341,7 @@ def segment_characters_by_projection(binary_line, min_width_ratio=0.012,
         if tight_w < W * min_width_ratio:
             continue
         x = x1 + x_local_1
-        char_img = binary_line[y1:y2 + 1, x:x + tight_w]
+        char_img = binary_line[y1 : y2 + 1, x : x + tight_w]
         chars.append({"img": char_img, "bbox": (x, y1, tight_w, h)})
 
     chars.sort(key=lambda c: c["bbox"][0])
@@ -338,7 +360,7 @@ def crop_inner_plate(binary, margin_x=0.08, margin_y=0.08):
     my = min(int(h * margin_y), max(0, h // 4))
     if h - 2 * my <= 5 or w - 2 * mx <= 5:
         return binary
-    return binary[my:h - my, mx:w - mx]
+    return binary[my : h - my, mx : w - mx]
 
 
 def component_char_candidates(binary_img):
@@ -346,7 +368,9 @@ def component_char_candidates(binary_img):
     Extract character-like connected components from an inner plate region.
     """
     H, W = binary_img.shape
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_img, connectivity=8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        binary_img, connectivity=8
+    )
 
     candidates = []
     row_area = max(1, H * W)
@@ -371,13 +395,15 @@ def component_char_candidates(binary_img):
         if touches_edge and (w < W * 0.05 or (h > H * 0.62 and aspect < 0.28)):
             continue
 
-        char_img = binary_img[y:y + h, x:x + w]
-        candidates.append({
-            "img": char_img,
-            "bbox": (x, y, w, h),
-            "x_center": x + w / 2,
-            "y_center": y + h / 2,
-        })
+        char_img = binary_img[y : y + h, x : x + w]
+        candidates.append(
+            {
+                "img": char_img,
+                "bbox": (x, y, w, h),
+                "x_center": x + w / 2,
+                "y_center": y + h / 2,
+            }
+        )
 
     return candidates
 
@@ -389,7 +415,9 @@ def segment_two_line_components(binary_plate):
     inner = crop_inner_plate(binary_plate)
     top, bottom = split_two_lines(inner)
     top_chars = segment_line_components(top, y_offset=0, target_range=(3, 4))
-    bottom_chars = segment_line_components(bottom, y_offset=top.shape[0], target_range=(4, 6))
+    bottom_chars = segment_line_components(
+        bottom, y_offset=top.shape[0], target_range=(4, 6)
+    )
     if len(top_chars) >= 2 and len(bottom_chars) >= 3:
         return top_chars + bottom_chars
 
@@ -503,7 +531,7 @@ def _split_wide_candidate(binary_line, candidate, median_width):
     if not too_wide or aspect < 0.62 or h < H * 0.28:
         return None
 
-    patch = binary_line[y:y + h, x:x + w]
+    patch = binary_line[y : y + h, x : x + w]
     if patch.size == 0:
         return None
 
@@ -520,7 +548,9 @@ def _split_wide_candidate(binary_line, candidate, median_width):
 
     split_local = lo + int(np.argmin(smooth[lo:hi]))
     left_peak = float(np.max(smooth[:split_local])) if split_local > 0 else 0.0
-    right_peak = float(np.max(smooth[split_local + 1:])) if split_local + 1 < w else 0.0
+    right_peak = (
+        float(np.max(smooth[split_local + 1 :])) if split_local + 1 < w else 0.0
+    )
     peak = max(1.0, min(left_peak, right_peak))
     valley_ratio = float(smooth[split_local]) / peak
 
@@ -666,12 +696,14 @@ def _merge_line_candidates(binary_line, candidates):
         if w < W * 0.018 or h < H * 0.25:
             continue
         char_img = binary_line[y1:y2, x1:x2]
-        chars.append({
-            "img": char_img,
-            "bbox": (x1, y1, w, h),
-            "x_center": x1 + w / 2,
-            "y_center": y1 + h / 2,
-        })
+        chars.append(
+            {
+                "img": char_img,
+                "bbox": (x1, y1, w, h),
+                "x_center": x1 + w / 2,
+                "y_center": y1 + h / 2,
+            }
+        )
     return chars
 
 
@@ -755,12 +787,12 @@ def trim_outer_artifacts(chars, line_width, min_count=8):
 def resize_pad_char(char_img, size=32, pad_ratio=0.15):
     """
     Resize ký tự về kích thước (size x size) với padding để giữ aspect ratio.
-    
+
     Args:
         char_img: np.array (ảnh ký tự nhị phân)
         size: kích thước đích (mặc định 32)
         pad_ratio: tỉ lệ padding xung quanh ký tự
-        
+
     Returns:
         np.array: ảnh ký tự size x size
     """
@@ -777,7 +809,7 @@ def resize_pad_char(char_img, size=32, pad_ratio=0.15):
     canvas = np.zeros((size, size), dtype=np.uint8)
     x_off = (size - new_w) // 2
     y_off = (size - new_h) // 2
-    canvas[y_off:y_off + new_h, x_off:x_off + new_w] = resized
+    canvas[y_off : y_off + new_h, x_off : x_off + new_w] = resized
     return canvas
 
 
@@ -853,11 +885,11 @@ def _segmentation_score(binary, chars, plate_type, binary_score):
 def segment_plate(plate_img, plate_type):
     """
     End-to-end character segmentation cho một plate.
-    
+
     Args:
         plate_img: np.array (ảnh biển số)
         plate_type: "1line" hoặc "2line"
-        
+
     Returns:
         tuple: (char_imgs, all_chars_info, binary_plate)
                - char_imgs: list of np.array (size x size, nhị phân, chuẩn hoá kích thước)
@@ -889,7 +921,9 @@ def segment_plate(plate_img, plate_type):
             )
             for _, candidate_binary, binary_score in candidates[:10]:
                 chars = _segment_binary_plate(candidate_binary, plate_type)
-                score = _segmentation_score(candidate_binary, chars, plate_type, binary_score)
+                score = _segmentation_score(
+                    candidate_binary, chars, plate_type, binary_score
+                )
                 if score > best[0]:
                     best = (score, candidate_binary, chars)
             _, binary, all_chars = best

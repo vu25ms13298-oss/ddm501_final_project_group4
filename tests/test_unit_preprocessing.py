@@ -1,7 +1,6 @@
 """Unit tests for preprocessing module."""
 
 import numpy as np
-import pytest
 
 from src.preprocessing import (
     preprocess_scene_image,

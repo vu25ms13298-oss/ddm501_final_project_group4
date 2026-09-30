@@ -5,7 +5,6 @@
 # training of the SVM classifier on ResNet18 features, and saving of models.
 
 import os
-import sys
 import random
 import json
 import numpy as np
@@ -110,8 +109,10 @@ def generate_plate_style_synthetic_chars(
             center = (img_size / 2, img_size / 2)
             rot = cv2.getRotationMatrix2D(center, angle, 1.0)
             affine = np.array(
-                [[scale_x, shear_x, (1 - scale_x) * center[0]],
-                 [0.0, scale_y, (1 - scale_y) * center[1]]],
+                [
+                    [scale_x, shear_x, (1 - scale_x) * center[0]],
+                    [0.0, scale_y, (1 - scale_y) * center[1]],
+                ],
                 dtype=np.float32,
             )
             affine = np.vstack([affine, [0, 0, 1]]) @ np.vstack([rot, [0, 0, 1]])
@@ -135,8 +136,10 @@ def generate_plate_style_synthetic_chars(
                     y1 = min(y2, y1 + random.randint(0, 2))
                 if random.random() < 0.18:
                     x2 = max(x1, x2 - random.randint(0, 1))
-                cropped = arr[y1:y2 + 1, x1:x2 + 1]
-                final = resize_pad_char(cropped, size=32, pad_ratio=random.uniform(0.08, 0.18))
+                cropped = arr[y1 : y2 + 1, x1 : x2 + 1]
+                final = resize_pad_char(
+                    cropped, size=32, pad_ratio=random.uniform(0.08, 0.18)
+                )
             else:
                 final = np.zeros((32, 32), dtype=np.uint8)
 
@@ -146,7 +149,9 @@ def generate_plate_style_synthetic_chars(
     return np.array(images), np.array(labels)
 
 
-def generate_synthetic_chars(char_classes=CHAR_CLASSES, samples_per_class=80, img_size=64):
+def generate_synthetic_chars(
+    char_classes=CHAR_CLASSES, samples_per_class=80, img_size=64
+):
     """
     Sinh dataset ký tự synthetic với augmentation.
 
@@ -198,7 +203,7 @@ def generate_synthetic_chars(char_classes=CHAR_CLASSES, samples_per_class=80, im
             if len(xs) > 0 and len(ys) > 0:
                 x1, x2 = xs.min(), xs.max()
                 y1, y2 = ys.min(), ys.max()
-                cropped = arr[y1:y2 + 1, x1:x2 + 1]
+                cropped = arr[y1 : y2 + 1, x1 : x2 + 1]
                 # Resize/pad to 32x32 (same as segmentation output)
                 final = resize_pad_char(cropped, size=32)
             else:
@@ -213,21 +218,21 @@ def generate_synthetic_chars(char_classes=CHAR_CLASSES, samples_per_class=80, im
 def train_svm(X_train, y_train, seed=42):
     """
     Train SVM (RBF kernel) classifier on scaled features.
-    
+
     Args:
         X_train: features training set (N, 512)
         y_train: labels training set (N,)
         seed: random state seed
-        
+
     Returns:
         tuple: (trained_svm_model, fitted_scaler)
     """
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
-    
+
     svm_model = SVC(kernel="rbf", C=10, gamma="scale", random_state=seed)
     svm_model.fit(X_train_scaled, y_train)
-    
+
     return svm_model, scaler
 
 
@@ -251,7 +256,7 @@ def save_models(
         metrics: optional evaluation metrics to persist
     """
     os.makedirs(save_dir, exist_ok=True)
-    
+
     joblib.dump(svm_model, os.path.join(save_dir, "classifier.joblib"))
     joblib.dump(scaler, os.path.join(save_dir, "scaler.joblib"))
 

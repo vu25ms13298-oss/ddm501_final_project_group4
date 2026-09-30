@@ -68,7 +68,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -88,6 +87,7 @@ except Exception as exc:  # pragma: no cover
 
 try:
     from scipy import stats as _scipy_stats
+
     _HAVE_SCIPY = True
 except Exception:
     _HAVE_SCIPY = False
@@ -99,6 +99,7 @@ except Exception:
 @dataclass
 class HogConfig:
     """HOG settings. Defaults reproduce HOG324 on a 32x32 crop."""
+
     image_size: tuple[int, int] = (32, 32)
     pixels_per_cell: tuple[int, int] = (8, 8)
     cells_per_block: tuple[int, int] = (2, 2)
@@ -114,12 +115,19 @@ class HogConfig:
         cpw = w // self.pixels_per_cell[1]
         bph = cph - self.cells_per_block[0] + 1
         bpw = cpw - self.cells_per_block[1] + 1
-        return bph * bpw * self.cells_per_block[0] * self.cells_per_block[1] * self.orientations
+        return (
+            bph
+            * bpw
+            * self.cells_per_block[0]
+            * self.cells_per_block[1]
+            * self.orientations
+        )
 
 
 @dataclass
 class SvmConfig:
     """SVM hyper-parameters. Defaults match the report."""
+
     C: float = 10.0
     kernel: str = "rbf"
     gamma: str | float = "scale"
@@ -139,8 +147,15 @@ class ModelSpec:
 # Recover config from model dir (metadata.json and/or the saved estimator)
 # ===========================================================================
 _METADATA_NAMES = ("metadata.json", "meta.json", "model_metadata.json", "config.json")
-_MODEL_NAMES = ("model.joblib", "classifier.joblib", "svm.joblib", "ocr_model.joblib",
-                "model.pkl", "classifier.pkl", "svm.pkl")
+_MODEL_NAMES = (
+    "model.joblib",
+    "classifier.joblib",
+    "svm.joblib",
+    "ocr_model.joblib",
+    "model.pkl",
+    "classifier.pkl",
+    "svm.pkl",
+)
 
 
 def _load_json(path: Path) -> dict:
@@ -160,8 +175,11 @@ def _maybe(d: dict, *keys, default=None):
     return default
 
 
-def recover_config(model_dir: Optional[Path], cli_pixels_per_cell: Optional[int],
-                   cli_binarize: Optional[bool]) -> tuple[HogConfig, SvmConfig]:
+def recover_config(
+    model_dir: Optional[Path],
+    cli_pixels_per_cell: Optional[int],
+    cli_binarize: Optional[bool],
+) -> tuple[HogConfig, SvmConfig]:
     hog = HogConfig()
     svm = SvmConfig()
 
@@ -229,8 +247,10 @@ def recover_config(model_dir: Optional[Path], cli_pixels_per_cell: Optional[int]
                 svm.C = params.get("C", svm.C)
                 svm.kernel = params.get("kernel", svm.kernel)
                 svm.gamma = params.get("gamma", svm.gamma)
-                print(f"[info] recovered SVM params from estimator: "
-                      f"C={svm.C}, kernel={svm.kernel}, gamma={svm.gamma}")
+                print(
+                    f"[info] recovered SVM params from estimator: "
+                    f"C={svm.C}, kernel={svm.kernel}, gamma={svm.gamma}"
+                )
 
     # CLI overrides win
     if cli_pixels_per_cell is not None:
@@ -285,8 +305,22 @@ def _extract_svc_params(obj) -> dict:
 def load_cached_features(path: Path) -> tuple[np.ndarray, np.ndarray]:
     """Load X, y from .npz, or from X.npy + y.npy in a directory."""
     if path.is_dir():
-        xp = next((path / n for n in ("X.npy", "features.npy", "hog.npy") if (path / n).exists()), None)
-        yp = next((path / n for n in ("y.npy", "labels.npy", "targets.npy") if (path / n).exists()), None)
+        xp = next(
+            (
+                path / n
+                for n in ("X.npy", "features.npy", "hog.npy")
+                if (path / n).exists()
+            ),
+            None,
+        )
+        yp = next(
+            (
+                path / n
+                for n in ("y.npy", "labels.npy", "targets.npy")
+                if (path / n).exists()
+            ),
+            None,
+        )
         if xp is None or yp is None:
             raise FileNotFoundError(f"Could not find X/y .npy files in {path}")
         return np.load(xp), np.load(yp, allow_pickle=True)
@@ -295,8 +329,10 @@ def load_cached_features(path: Path) -> tuple[np.ndarray, np.ndarray]:
         xkey = next((k for k in ("X", "features", "hog", "x") if k in data), None)
         ykey = next((k for k in ("y", "labels", "targets", "label") if k in data), None)
         if xkey is None or ykey is None:
-            raise KeyError(f"{path} must contain arrays named X and y "
-                           f"(found keys: {list(data.keys())})")
+            raise KeyError(
+                f"{path} must contain arrays named X and y "
+                f"(found keys: {list(data.keys())})"
+            )
         return data[xkey], data[ykey]
     if path.suffix == ".npy":
         # assume sibling y.npy
@@ -310,8 +346,9 @@ def load_cached_features(path: Path) -> tuple[np.ndarray, np.ndarray]:
 _IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".pgm"}
 
 
-def build_features_from_images(data_dir: Path, hog: HogConfig,
-                               verbose: bool = True) -> tuple[np.ndarray, np.ndarray]:
+def build_features_from_images(
+    data_dir: Path, hog: HogConfig, verbose: bool = True
+) -> tuple[np.ndarray, np.ndarray]:
     """Walk a class-folder dataset and extract HOG features."""
     try:
         from skimage.feature import hog as sk_hog
@@ -320,8 +357,10 @@ def build_features_from_images(data_dir: Path, hog: HogConfig,
         from skimage.color import rgb2gray
         from skimage.filters import threshold_otsu
     except Exception as exc:  # pragma: no cover
-        sys.exit(f"[fatal] scikit-image is required for --data-dir mode: {exc}\n"
-                 f"  pip install scikit-image")
+        sys.exit(
+            f"[fatal] scikit-image is required for --data-dir mode: {exc}\n"
+            f"  pip install scikit-image"
+        )
 
     class_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir()])
     if not class_dirs:
@@ -370,8 +409,10 @@ def build_features_from_images(data_dir: Path, hog: HogConfig,
     X = np.asarray(X, dtype=np.float64)
     y = np.asarray(y)
     if verbose:
-        print(f"[load] built {X.shape[0]} samples x {X.shape[1]} dims "
-              f"in {time.time()-t0:.1f}s")
+        print(
+            f"[load] built {X.shape[0]} samples x {X.shape[1]} dims "
+            f"in {time.time()-t0:.1f}s"
+        )
     return X, y
 
 
@@ -397,18 +438,22 @@ def mean_ci95(values: np.ndarray) -> tuple[float, float, float, float]:
     return m, sd, m - half, m + half
 
 
-def run_cv(X: np.ndarray, y: np.ndarray, svm: SvmConfig,
-           folds: int, seed: int) -> dict:
+def run_cv(X: np.ndarray, y: np.ndarray, svm: SvmConfig, folds: int, seed: int) -> dict:
     pipe = make_pipeline(
         StandardScaler(),
-        SVC(C=svm.C, kernel=svm.kernel, gamma=svm.gamma,
-            decision_function_shape=svm.decision_function_shape),
+        SVC(
+            C=svm.C,
+            kernel=svm.kernel,
+            gamma=svm.gamma,
+            decision_function_shape=svm.decision_function_shape,
+        ),
     )
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
     scoring = {"accuracy": "accuracy", "macro_f1": "f1_macro"}
     t0 = time.time()
-    res = cross_validate(pipe, X, y, cv=skf, scoring=scoring,
-                         n_jobs=-1, return_train_score=False)
+    res = cross_validate(
+        pipe, X, y, cv=skf, scoring=scoring, n_jobs=-1, return_train_score=False
+    )
     elapsed = time.time() - t0
 
     acc = res["test_accuracy"]
@@ -423,8 +468,12 @@ def run_cv(X: np.ndarray, y: np.ndarray, svm: SvmConfig,
         "n_classes": int(len(np.unique(y))),
         "acc_per_fold": acc.tolist(),
         "f1_per_fold": f1.tolist(),
-        "acc_mean": a_m, "acc_std": a_sd, "acc_ci": (a_lo, a_hi),
-        "f1_mean": f_m, "f1_std": f_sd, "f1_ci": (f_lo, f_hi),
+        "acc_mean": a_m,
+        "acc_std": a_sd,
+        "acc_ci": (a_lo, a_hi),
+        "f1_mean": f_m,
+        "f1_std": f_sd,
+        "f1_ci": (f_lo, f_hi),
         "elapsed_s": elapsed,
     }
 
@@ -436,48 +485,85 @@ def print_result(name: str, r: dict) -> None:
     print("\n" + "=" * 68)
     print(f"  {name}")
     print("=" * 68)
-    print(f"  samples={r['n_samples']}  features={r['n_features']}  "
-          f"classes={r['n_classes']}  folds={r['folds']}  seed={r['seed']}")
-    print(f"  per-fold accuracy : "
-          f"{', '.join(f'{x*100:.2f}' for x in r['acc_per_fold'])}")
-    print(f"  per-fold macro-F1 : "
-          f"{', '.join(f'{x*100:.2f}' for x in r['f1_per_fold'])}")
+    print(
+        f"  samples={r['n_samples']}  features={r['n_features']}  "
+        f"classes={r['n_classes']}  folds={r['folds']}  seed={r['seed']}"
+    )
+    print(
+        f"  per-fold accuracy : "
+        f"{', '.join(f'{x*100:.2f}' for x in r['acc_per_fold'])}"
+    )
+    print(
+        f"  per-fold macro-F1 : "
+        f"{', '.join(f'{x*100:.2f}' for x in r['f1_per_fold'])}"
+    )
     print("-" * 68)
-    print(f"  CV ACCURACY : {r['acc_mean']*100:.2f}% +/- {r['acc_std']*100:.2f}  "
-          f"(95% CI [{r['acc_ci'][0]*100:.2f}, {r['acc_ci'][1]*100:.2f}])")
-    print(f"  CV MACRO-F1 : {r['f1_mean']*100:.2f}% +/- {r['f1_std']*100:.2f}  "
-          f"(95% CI [{r['f1_ci'][0]*100:.2f}, {r['f1_ci'][1]*100:.2f}])")
+    print(
+        f"  CV ACCURACY : {r['acc_mean']*100:.2f}% +/- {r['acc_std']*100:.2f}  "
+        f"(95% CI [{r['acc_ci'][0]*100:.2f}, {r['acc_ci'][1]*100:.2f}])"
+    )
+    print(
+        f"  CV MACRO-F1 : {r['f1_mean']*100:.2f}% +/- {r['f1_std']*100:.2f}  "
+        f"(95% CI [{r['f1_ci'][0]*100:.2f}, {r['f1_ci'][1]*100:.2f}])"
+    )
     print(f"  (computed in {r['elapsed_s']:.1f}s)")
     print("=" * 68)
     # Ready-to-paste row for the report table tab:cv
     print("  >> paste into report Table tab:cv:")
-    print(f"     {name} & "
-          f"{r['acc_mean']*100:.2f} $\\pm$ {r['acc_std']*100:.2f} & "
-          f"{r['f1_mean']*100:.2f} $\\pm$ {r['f1_std']*100:.2f} \\\\")
+    print(
+        f"     {name} & "
+        f"{r['acc_mean']*100:.2f} $\\pm$ {r['acc_std']*100:.2f} & "
+        f"{r['f1_mean']*100:.2f} $\\pm$ {r['f1_std']*100:.2f} \\\\"
+    )
 
 
 def write_csv(path: Path, rows: list[tuple[str, dict]]) -> None:
     import csv
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["model", "folds", "seed", "n_samples", "n_features",
-                    "n_classes", "acc_mean_pct", "acc_std_pct",
-                    "acc_ci_low_pct", "acc_ci_high_pct",
-                    "f1_mean_pct", "f1_std_pct",
-                    "f1_ci_low_pct", "f1_ci_high_pct",
-                    "acc_per_fold_pct", "f1_per_fold_pct"])
+        w.writerow(
+            [
+                "model",
+                "folds",
+                "seed",
+                "n_samples",
+                "n_features",
+                "n_classes",
+                "acc_mean_pct",
+                "acc_std_pct",
+                "acc_ci_low_pct",
+                "acc_ci_high_pct",
+                "f1_mean_pct",
+                "f1_std_pct",
+                "f1_ci_low_pct",
+                "f1_ci_high_pct",
+                "acc_per_fold_pct",
+                "f1_per_fold_pct",
+            ]
+        )
         for name, r in rows:
-            w.writerow([
-                name, r["folds"], r["seed"], r["n_samples"], r["n_features"],
-                r["n_classes"],
-                f"{r['acc_mean']*100:.4f}", f"{r['acc_std']*100:.4f}",
-                f"{r['acc_ci'][0]*100:.4f}", f"{r['acc_ci'][1]*100:.4f}",
-                f"{r['f1_mean']*100:.4f}", f"{r['f1_std']*100:.4f}",
-                f"{r['f1_ci'][0]*100:.4f}", f"{r['f1_ci'][1]*100:.4f}",
-                ";".join(f"{x*100:.4f}" for x in r["acc_per_fold"]),
-                ";".join(f"{x*100:.4f}" for x in r["f1_per_fold"]),
-            ])
+            w.writerow(
+                [
+                    name,
+                    r["folds"],
+                    r["seed"],
+                    r["n_samples"],
+                    r["n_features"],
+                    r["n_classes"],
+                    f"{r['acc_mean']*100:.4f}",
+                    f"{r['acc_std']*100:.4f}",
+                    f"{r['acc_ci'][0]*100:.4f}",
+                    f"{r['acc_ci'][1]*100:.4f}",
+                    f"{r['f1_mean']*100:.4f}",
+                    f"{r['f1_std']*100:.4f}",
+                    f"{r['f1_ci'][0]*100:.4f}",
+                    f"{r['f1_ci'][1]*100:.4f}",
+                    ";".join(f"{x*100:.4f}" for x in r["acc_per_fold"]),
+                    ";".join(f"{x*100:.4f}" for x in r["f1_per_fold"]),
+                ]
+            )
     print(f"\n[ok] wrote {path}")
 
 
@@ -509,28 +595,54 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    p.add_argument("--model-dir", action="append", default=[],
-                   help="Trained model directory (recovers HOG/SVM config). "
-                        "Repeatable to compare several models.")
-    p.add_argument("--features", action="append", default=[],
-                   help="Cached features (.npz with X,y, or .npy / dir). "
-                        "Pair positionally with each --model-dir. Mode A.")
-    p.add_argument("--data-dir", action="append", default=[],
-                   help="Class-folder image dataset to rebuild HOG from. "
-                        "Pair positionally with each --model-dir. Mode B.")
-    p.add_argument("--name", action="append", default=[],
-                   help="Display name for each model (optional).")
+    p.add_argument(
+        "--model-dir",
+        action="append",
+        default=[],
+        help="Trained model directory (recovers HOG/SVM config). "
+        "Repeatable to compare several models.",
+    )
+    p.add_argument(
+        "--features",
+        action="append",
+        default=[],
+        help="Cached features (.npz with X,y, or .npy / dir). "
+        "Pair positionally with each --model-dir. Mode A.",
+    )
+    p.add_argument(
+        "--data-dir",
+        action="append",
+        default=[],
+        help="Class-folder image dataset to rebuild HOG from. "
+        "Pair positionally with each --model-dir. Mode B.",
+    )
+    p.add_argument(
+        "--name",
+        action="append",
+        default=[],
+        help="Display name for each model (optional).",
+    )
     p.add_argument("--folds", type=int, default=5, help="Number of CV folds.")
     p.add_argument("--seed", type=int, default=42, help="Random seed.")
-    p.add_argument("--pixels-per-cell", type=int, default=None,
-                   help="Override HOG cell size (8 -> HOG324, 4 -> HOG1764).")
-    p.add_argument("--binarize", dest="binarize", action="store_true",
-                   default=None, help="Otsu-binarize crops before HOG "
-                   "(only if training did).")
+    p.add_argument(
+        "--pixels-per-cell",
+        type=int,
+        default=None,
+        help="Override HOG cell size (8 -> HOG324, 4 -> HOG1764).",
+    )
+    p.add_argument(
+        "--binarize",
+        dest="binarize",
+        action="store_true",
+        default=None,
+        help="Otsu-binarize crops before HOG " "(only if training did).",
+    )
     p.add_argument("--output", type=str, default=None, help="CSV output path.")
-    p.add_argument("--help-cache", action="store_true",
-                   help="Print a snippet to cache features in train_ocr_model.py "
-                        "and exit.")
+    p.add_argument(
+        "--help-cache",
+        action="store_true",
+        help="Print a snippet to cache features in train_ocr_model.py " "and exit.",
+    )
     return p
 
 
@@ -549,7 +661,9 @@ def main(argv=None) -> int:
 
     if not args.features and not args.data_dir:
         print("[fatal] provide data via --features (Mode A) or --data-dir (Mode B).")
-        print("        Run with --help-cache to see how to cache features at train time.")
+        print(
+            "        Run with --help-cache to see how to cache features at train time."
+        )
         return 2
 
     rows: list[tuple[str, dict]] = []
@@ -563,24 +677,30 @@ def main(argv=None) -> int:
         name = nm or (model_dir.name if model_dir else f"model_{i+1}")
 
         hog, svm = recover_config(model_dir, args.pixels_per_cell, args.binarize)
-        print(f"\n[config] {name}: HOG cells={hog.pixels_per_cell} "
-              f"blocks={hog.cells_per_block} orient={hog.orientations} "
-              f"-> expected dim {hog.expected_dim}; "
-              f"SVM C={svm.C} kernel={svm.kernel} gamma={svm.gamma}")
+        print(
+            f"\n[config] {name}: HOG cells={hog.pixels_per_cell} "
+            f"blocks={hog.cells_per_block} orient={hog.orientations} "
+            f"-> expected dim {hog.expected_dim}; "
+            f"SVM C={svm.C} kernel={svm.kernel} gamma={svm.gamma}"
+        )
 
         # Load data
         if feat:
             X, y = load_cached_features(Path(feat))
             print(f"[data] cached features: X={X.shape} y={y.shape}")
             if X.shape[1] != hog.expected_dim:
-                print(f"[warn] feature dim {X.shape[1]} != expected {hog.expected_dim}; "
-                      f"using cached features as-is (this is fine if training used "
-                      f"this exact matrix).")
+                print(
+                    f"[warn] feature dim {X.shape[1]} != expected {hog.expected_dim}; "
+                    f"using cached features as-is (this is fine if training used "
+                    f"this exact matrix)."
+                )
         elif ddir:
             X, y = build_features_from_images(Path(ddir), hog)
             if X.shape[1] != hog.expected_dim:
-                print(f"[warn] extracted dim {X.shape[1]} != expected "
-                      f"{hog.expected_dim}; check --pixels-per-cell / image size.")
+                print(
+                    f"[warn] extracted dim {X.shape[1]} != expected "
+                    f"{hog.expected_dim}; check --pixels-per-cell / image size."
+                )
         else:
             print(f"[skip] {name}: no --features or --data-dir provided.")
             continue
@@ -588,8 +708,10 @@ def main(argv=None) -> int:
         # Sanity: stratification needs >= folds samples per class
         classes, counts = np.unique(y, return_counts=True)
         if counts.min() < args.folds:
-            print(f"[warn] smallest class has {counts.min()} samples < folds="
-                  f"{args.folds}; reducing folds to {int(counts.min())}.")
+            print(
+                f"[warn] smallest class has {counts.min()} samples < folds="
+                f"{args.folds}; reducing folds to {int(counts.min())}."
+            )
             folds = max(2, int(counts.min()))
         else:
             folds = args.folds

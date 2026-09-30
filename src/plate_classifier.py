@@ -3,6 +3,7 @@
 # ==========================================
 # This module classifies license plates based on aspect ratio (AR) of width / height.
 
+
 def classify_plate_type(plate_img, threshold=2.5):
     """
     Phân loại loại biển số dựa trên aspect ratio.
@@ -12,7 +13,7 @@ def classify_plate_type(plate_img, threshold=2.5):
         threshold: ngưỡng AR phân biệt 1-line/2-line (ví dụ 2.5)
 
     Returns:
-        tuple: (plate_type, aspect_ratio) 
+        tuple: (plate_type, aspect_ratio)
                - plate_type: "1line" (biển dài) hoặc "2line" (biển vuông/2 dòng)
                - aspect_ratio: tỉ lệ rộng/cao thực tế
     """

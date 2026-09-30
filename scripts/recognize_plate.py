@@ -38,8 +38,12 @@ def _json_safe_bbox(bbox):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Recognize license plate text from an image.")
-    parser.add_argument("image", type=Path, help="Input scene image or cropped plate image.")
+    parser = argparse.ArgumentParser(
+        description="Recognize license plate text from an image."
+    )
+    parser.add_argument(
+        "image", type=Path, help="Input scene image or cropped plate image."
+    )
     parser.add_argument(
         "--models-dir",
         type=Path,
@@ -110,9 +114,13 @@ def main():
         "plate_text": text,
         "bbox": _json_safe_bbox(result.get("bbox")),
         "plate_type": result.get("plate_type"),
-        "char_count": int(result.get("char_count", len(result.get("char_images") or []))),
+        "char_count": int(
+            result.get("char_count", len(result.get("char_images") or []))
+        ),
         "deskew_angle": (
-            None if result.get("deskew_angle") is None else float(result.get("deskew_angle"))
+            None
+            if result.get("deskew_angle") is None
+            else float(result.get("deskew_angle"))
         ),
         "raw_plate_text": result.get("raw_plate_string"),
     }

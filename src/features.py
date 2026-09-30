@@ -10,10 +10,12 @@ from torchvision import models, transforms
 import numpy as np
 import cv2
 
+
 class ResNet18FeatureExtractor(nn.Module):
     """
     Wrapper cho ResNet18 pre-trained: bỏ FC layer cuối, output 512-d feature.
     """
+
     def __init__(self):
         super().__init__()
         # Load pre-trained ResNet18
@@ -33,17 +35,19 @@ class ResNet18FeatureExtractor(nn.Module):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Transform để đưa ảnh ký tự (grayscale 32x32) về dạng input của ResNet (RGB 224x224)
-char_transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize((224, 224)),
-    transforms.Grayscale(num_output_channels=3),  # 1 channel → 3 channel
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
+char_transform = transforms.Compose(
+    [
+        transforms.ToPILImage(),
+        transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=3),  # 1 channel → 3 channel
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
 
 # Initialize global encoder instance, lazily or statically
 _encoder = None
+
 
 def get_encoder():
     """Lazily loads and returns the global ResNet18 feature extractor model."""
@@ -74,10 +78,10 @@ def extract_features(char_imgs, batch_size=64, encoder_model=None):
         return np.zeros((0, 512), dtype=np.float32)
 
     encoder = encoder_model if encoder_model is not None else get_encoder()
-    
+
     features_list = []
     for i in range(0, len(char_imgs), batch_size):
-        batch = char_imgs[i:i + batch_size]
+        batch = char_imgs[i : i + batch_size]
         batch_tensor = torch.stack([char_transform(img) for img in batch]).to(device)
         feats = encoder(batch_tensor)
         features_list.append(feats.cpu().numpy())
@@ -87,6 +91,7 @@ def extract_features(char_imgs, batch_size=64, encoder_model=None):
 # ===========================================================================
 # Classical feature extractors (HOG, Haar Wavelet, Raw pixel)
 # ===========================================================================
+
 
 def extract_raw_features(char_imgs):
     """
@@ -107,8 +112,9 @@ def extract_raw_features(char_imgs):
     return np.array(out, dtype=np.float32)
 
 
-def extract_hog_features(char_imgs, pixels_per_cell=(4, 4), cells_per_block=(2, 2),
-                          orientations=9):
+def extract_hog_features(
+    char_imgs, pixels_per_cell=(4, 4), cells_per_block=(2, 2), orientations=9
+):
     """
     Histogram of Oriented Gradients (HOG) features for character images.
     Default config follows LPR_Report.pdf on 32×32: 1764-d HOG vector.
@@ -125,7 +131,9 @@ def extract_hog_features(char_imgs, pixels_per_cell=(4, 4), cells_per_block=(2, 
     try:
         from skimage.feature import hog as skimage_hog
     except ImportError as exc:
-        raise ImportError("scikit-image is required for HOG: pip install scikit-image") from exc
+        raise ImportError(
+            "scikit-image is required for HOG: pip install scikit-image"
+        ) from exc
 
     out = []
     for img in char_imgs:

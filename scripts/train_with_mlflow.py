@@ -15,7 +15,6 @@ import sys
 import time
 from pathlib import Path
 
-import joblib
 import mlflow
 import mlflow.sklearn
 import numpy as np
@@ -40,12 +39,6 @@ from src.classifier import (
     generate_synthetic_chars,
     save_models,
 )
-from src.features import (
-    extract_hog_features,
-    extract_hog_legacy_features,
-    extract_raw_features,
-    extract_wavelet_features,
-)
 
 from scripts.train_ocr_model import (
     FEATURE_EXTRACTORS,
@@ -57,19 +50,37 @@ from scripts.train_ocr_model import (
 def parse_args():
     p = argparse.ArgumentParser(description="Train OCR model with MLflow tracking.")
     p.add_argument("--feature", choices=list(FEATURE_EXTRACTORS.keys()), default="hog")
-    p.add_argument("--classifier", choices=["svm", "logistic", "knn", "random_forest"], default="svm")
+    p.add_argument(
+        "--classifier",
+        choices=["svm", "logistic", "knn", "random_forest"],
+        default="svm",
+    )
     p.add_argument("--samples-per-class", type=int, default=250)
     p.add_argument("--plate-style-samples-per-class", type=int, default=400)
     p.add_argument("--no-emnist", action="store_true", default=True)
-    p.add_argument("--labeled-char-dir", type=Path, default=PROJECT_ROOT / "data" / "characters" / "labeled")
+    p.add_argument(
+        "--labeled-char-dir",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "characters" / "labeled",
+    )
     p.add_argument("--real-augmentations", type=int, default=60)
     p.add_argument("--test-size", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "models" / "ocr_hog_svm")
+    p.add_argument(
+        "--output-dir", type=Path, default=PROJECT_ROOT / "models" / "ocr_hog_svm"
+    )
     p.add_argument("--experiment-name", type=str, default="lpr-ocr-training")
     p.add_argument("--run-name", type=str, default=None)
-    p.add_argument("--mlflow-uri", type=str, default=os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"))
-    p.add_argument("--tune", action="store_true", help="Run hyperparameter tuning with cross-validation")
+    p.add_argument(
+        "--mlflow-uri",
+        type=str,
+        default=os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+    )
+    p.add_argument(
+        "--tune",
+        action="store_true",
+        help="Run hyperparameter tuning with cross-validation",
+    )
     p.add_argument("--cv-folds", type=int, default=5)
     return p.parse_args()
 
@@ -93,7 +104,9 @@ def main():
         mlflow.log_param("feature_method", args.feature)
         mlflow.log_param("classifier", args.classifier)
         mlflow.log_param("samples_per_class", args.samples_per_class)
-        mlflow.log_param("plate_style_samples_per_class", args.plate_style_samples_per_class)
+        mlflow.log_param(
+            "plate_style_samples_per_class", args.plate_style_samples_per_class
+        )
         mlflow.log_param("test_size", args.test_size)
         mlflow.log_param("seed", args.seed)
         mlflow.log_param("num_classes", len(char_list))
@@ -111,7 +124,9 @@ def main():
         datasets_y = [y_syn]
 
         if args.plate_style_samples_per_class > 0:
-            print(f"Generating plate-style synthetic: {args.plate_style_samples_per_class}/class")
+            print(
+                f"Generating plate-style synthetic: {args.plate_style_samples_per_class}/class"
+            )
             x_plate, y_plate = generate_plate_style_synthetic_chars(
                 char_classes=CHAR_CLASSES,
                 samples_per_class=args.plate_style_samples_per_class,
@@ -121,7 +136,9 @@ def main():
             datasets_y.append(y_plate)
 
         x_real, y_real = collect_labeled_char_dir(
-            args.labeled_char_dir, char_list, args.real_augmentations,
+            args.labeled_char_dir,
+            char_list,
+            args.real_augmentations,
         )
         if len(x_real) > 0:
             datasets_x.append(x_real)
@@ -142,7 +159,11 @@ def main():
 
         # ---- Train/test split ----
         X_train, X_test, y_train, y_test = train_test_split(
-            features, all_y, test_size=args.test_size, random_state=args.seed, stratify=all_y,
+            features,
+            all_y,
+            test_size=args.test_size,
+            random_state=args.seed,
+            stratify=all_y,
         )
         mlflow.log_param("n_train", len(X_train))
         mlflow.log_param("n_test", len(X_test))
@@ -162,6 +183,7 @@ def main():
             }
             print(f"Running GridSearchCV with {args.cv_folds}-fold CV...")
             from sklearn.svm import SVC
+
             grid = GridSearchCV(
                 SVC(random_state=args.seed),
                 param_grid,
@@ -187,7 +209,11 @@ def main():
 
             if args.tune:
                 cv_scores = cross_val_score(
-                    clf, X_train_s, y_train, cv=args.cv_folds, scoring="f1_macro",
+                    clf,
+                    X_train_s,
+                    y_train,
+                    cv=args.cv_folds,
+                    scoring="f1_macro",
                 )
                 mlflow.log_metric("cv_mean_f1_macro", round(cv_scores.mean(), 4))
                 mlflow.log_metric("cv_std_f1_macro", round(cv_scores.std(), 4))
@@ -230,7 +256,9 @@ def main():
 
         # ---- Save model locally ----
         save_models(
-            clf, scaler, str(args.output_dir),
+            clf,
+            scaler,
+            str(args.output_dir),
             feature_method=args.feature,
             classifier_name=args.classifier,
             metrics={"accuracy": accuracy, "macro_f1": macro_f1},
@@ -264,7 +292,7 @@ def main():
 
         print(f"\nMLflow run ID: {run.info.run_id}")
         print(f"MLflow experiment: {args.experiment_name}")
-        print(f"Model registered as: lpr-ocr-classifier")
+        print("Model registered as: lpr-ocr-classifier")
 
 
 if __name__ == "__main__":

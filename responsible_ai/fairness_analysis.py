@@ -17,7 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -113,9 +113,7 @@ def analyze_per_class_fairness(y_true, y_pred, char_list):
     std_acc = np.std(accuracies)
 
     underperforming = {
-        k: v
-        for k, v in per_class_acc.items()
-        if v["accuracy"] < mean_acc - 2 * std_acc
+        k: v for k, v in per_class_acc.items() if v["accuracy"] < mean_acc - 2 * std_acc
     }
 
     return {
@@ -159,7 +157,10 @@ def generate_fairness_report(output_dir: str, models_dir: str):
     if "digits" in group_results and "letters" in group_results:
         fig, ax = plt.subplots(figsize=(6, 4))
         groups = ["Digits", "Letters"]
-        accs = [group_results["digits"]["accuracy"], group_results["letters"]["accuracy"]]
+        accs = [
+            group_results["digits"]["accuracy"],
+            group_results["letters"]["accuracy"],
+        ]
         colors = ["#4C72B0", "#DD8452"]
         ax.bar(groups, accs, color=colors, width=0.5)
         ax.set_ylim(0, 1.1)
@@ -167,7 +168,9 @@ def generate_fairness_report(output_dir: str, models_dir: str):
         ax.set_title("Digit vs Letter Recognition Accuracy")
         for i, v in enumerate(accs):
             ax.text(i, v + 0.02, f"{v:.2%}", ha="center", fontweight="bold")
-        ax.axhline(y=0.9, color="gray", linestyle="--", alpha=0.5, label="90% threshold")
+        ax.axhline(
+            y=0.9, color="gray", linestyle="--", alpha=0.5, label="90% threshold"
+        )
         ax.legend()
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, "digit_vs_letter_accuracy.png"), dpi=150)
@@ -227,7 +230,7 @@ def generate_fairness_report(output_dir: str, models_dir: str):
     with open(os.path.join(output_dir, "fairness_report.json"), "w") as f:
         json.dump(report, f, indent=2)
 
-    print(f"\nFairness Report Summary:")
+    print("\nFairness Report Summary:")
     print(f"  Overall accuracy: {report['overall_accuracy']:.2%}")
     if "digits" in group_results:
         print(f"  Digit accuracy:  {group_results['digits']['accuracy']:.2%}")
@@ -238,7 +241,9 @@ def generate_fairness_report(output_dir: str, models_dir: str):
         print(f"  Fair (< 10%):    {group_results['fair']}")
     print(f"  Equity gap:      {class_results['equity_gap']:.2%}")
     if class_results["underperforming_classes"]:
-        print(f"  Underperforming: {list(class_results['underperforming_classes'].keys())}")
+        print(
+            f"  Underperforming: {list(class_results['underperforming_classes'].keys())}"
+        )
 
     print(f"\nReport saved to {output_dir}")
     return report
@@ -248,8 +253,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run fairness analysis.")
-    parser.add_argument("--models-dir", type=str, default=str(PROJECT_ROOT / "models" / "ocr_hog_svm"))
-    parser.add_argument("--output-dir", type=str, default=str(PROJECT_ROOT / "responsible_ai" / "results" / "fairness"))
+    parser.add_argument(
+        "--models-dir", type=str, default=str(PROJECT_ROOT / "models" / "ocr_hog_svm")
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=str(PROJECT_ROOT / "responsible_ai" / "results" / "fairness"),
+    )
     args = parser.parse_args()
 
     generate_fairness_report(args.output_dir, args.models_dir)

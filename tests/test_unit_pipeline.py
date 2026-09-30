@@ -1,7 +1,6 @@
 """Unit tests for the LPR pipeline module."""
 
 import numpy as np
-import pytest
 
 from src.pipeline import LPRPipeline, correct_plate_format
 

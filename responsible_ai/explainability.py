@@ -68,9 +68,11 @@ def run_shap_analysis(
     exp_features, exp_labels, exp_imgs = generate_background_data(n_per_class=2)
     exp_scaled = scaler.transform(exp_features)
 
-    sample_idx = np.random.choice(len(exp_scaled), min(n_explain, len(exp_scaled)), replace=False)
+    sample_idx = np.random.choice(
+        len(exp_scaled), min(n_explain, len(exp_scaled)), replace=False
+    )
     X_explain = exp_scaled[sample_idx]
-    y_explain = exp_labels[sample_idx]
+    _ = exp_labels[sample_idx]
 
     print(f"Computing SHAP values for {len(X_explain)} samples...")
     bg_sample = shap.sample(bg_scaled, min(100, len(bg_scaled)))
@@ -104,10 +106,14 @@ def run_shap_analysis(
 
     # Per-class importance for selected classes
     sample_classes = ["0", "A", "B", "5", "S"]
-    class_indices = [list(CHAR_CLASSES).index(c) for c in sample_classes if c in CHAR_CLASSES]
+    class_indices = [
+        list(CHAR_CLASSES).index(c) for c in sample_classes if c in CHAR_CLASSES
+    ]
 
     if isinstance(shap_values, list) and len(class_indices) > 0:
-        fig, axes = plt.subplots(1, len(class_indices), figsize=(5 * len(class_indices), 5))
+        fig, axes = plt.subplots(
+            1, len(class_indices), figsize=(5 * len(class_indices), 5)
+        )
         if len(class_indices) == 1:
             axes = [axes]
         for ax, cls_idx in zip(axes, class_indices):
@@ -167,7 +173,9 @@ def run_lime_analysis(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    sample_idx = np.random.choice(len(exp_scaled), min(n_explain, len(exp_scaled)), replace=False)
+    sample_idx = np.random.choice(
+        len(exp_scaled), min(n_explain, len(exp_scaled)), replace=False
+    )
     all_explanations = []
 
     for i, idx in enumerate(sample_idx):
@@ -177,26 +185,36 @@ def run_lime_analysis(
 
         exp = explainer.explain_instance(
             instance,
-            clf.predict_proba if hasattr(clf, "predict_proba") else clf.decision_function,
+            (
+                clf.predict_proba
+                if hasattr(clf, "predict_proba")
+                else clf.decision_function
+            ),
             num_features=15,
             top_labels=3,
         )
 
         fig = exp.as_pyplot_figure(label=pred_label)
         fig.set_size_inches(10, 5)
-        plt.title(f"LIME: True='{class_names[true_label]}', Pred='{class_names[pred_label]}'")
+        plt.title(
+            f"LIME: True='{class_names[true_label]}', Pred='{class_names[pred_label]}'"
+        )
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"lime_sample_{i}.png"), dpi=150)
         plt.close()
 
         exp_list = exp.as_list(label=pred_label)
-        all_explanations.append({
-            "sample_index": int(idx),
-            "true_class": class_names[true_label],
-            "predicted_class": class_names[pred_label],
-            "correct": true_label == pred_label,
-            "top_features": [{"feature": f, "weight": float(w)} for f, w in exp_list],
-        })
+        all_explanations.append(
+            {
+                "sample_index": int(idx),
+                "true_class": class_names[true_label],
+                "predicted_class": class_names[pred_label],
+                "correct": true_label == pred_label,
+                "top_features": [
+                    {"feature": f, "weight": float(w)} for f, w in exp_list
+                ],
+            }
+        )
 
     results = {
         "method": "LIME (LimeTabularExplainer)",
@@ -214,8 +232,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run model explainability analysis.")
-    parser.add_argument("--models-dir", type=str, default=str(PROJECT_ROOT / "models" / "ocr_hog_svm"))
-    parser.add_argument("--output-dir", type=str, default=str(PROJECT_ROOT / "responsible_ai" / "results"))
+    parser.add_argument(
+        "--models-dir", type=str, default=str(PROJECT_ROOT / "models" / "ocr_hog_svm")
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=str(PROJECT_ROOT / "responsible_ai" / "results"),
+    )
     parser.add_argument("--method", choices=["shap", "lime", "both"], default="both")
     args = parser.parse_args()
 

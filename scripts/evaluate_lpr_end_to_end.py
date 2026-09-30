@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import re
 import sys
 from pathlib import Path
 
@@ -102,7 +101,12 @@ def parse_args():
     parser.add_argument(
         "--yolo-model",
         type=Path,
-        default=PROJECT_ROOT / "models" / "yolo_runs" / "license_plate_yolov8_bbox" / "weights" / "best.pt",
+        default=PROJECT_ROOT
+        / "models"
+        / "yolo_runs"
+        / "license_plate_yolov8_bbox"
+        / "weights"
+        / "best.pt",
     )
     parser.add_argument(
         "--output",
@@ -149,7 +153,9 @@ def main():
                 )
                 prediction = normalize_text(result.get("plate_string", ""))
                 success = bool(result.get("success", False))
-                char_count = int(result.get("char_count", len(result.get("char_images") or [])))
+                char_count = int(
+                    result.get("char_count", len(result.get("char_images") or []))
+                )
 
             dist = levenshtein(label, prediction)
             denom = max(len(label), len(prediction), 1)
@@ -159,18 +165,20 @@ def main():
             norm_total += denom
             attempted += 1
 
-            output_rows.append({
-                "model": model_name,
-                "image": row["image"],
-                "label": label,
-                "prediction": prediction,
-                "correct": str(is_correct),
-                "success": str(success),
-                "char_count": str(char_count),
-                "plate_crop": str(assume_plate_crop),
-                "edit_distance": str(dist),
-                "normalized_char_accuracy": f"{1.0 - dist / denom:.4f}",
-            })
+            output_rows.append(
+                {
+                    "model": model_name,
+                    "image": row["image"],
+                    "label": label,
+                    "prediction": prediction,
+                    "correct": str(is_correct),
+                    "success": str(success),
+                    "char_count": str(char_count),
+                    "plate_crop": str(assume_plate_crop),
+                    "edit_distance": str(dist),
+                    "normalized_char_accuracy": f"{1.0 - dist / denom:.4f}",
+                }
+            )
 
         exact_acc = exact / attempted if attempted else 0.0
         char_acc = 1.0 - edit_total / norm_total if norm_total else 0.0

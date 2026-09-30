@@ -15,6 +15,7 @@ import numpy as np
 # Scene-level preprocessing
 # ---------------------------------------------------------------------------
 
+
 def preprocess_scene_image(image):
     """
     Preprocess raw scene image before plate detection.
@@ -40,9 +41,9 @@ def preprocess_scene_image(image):
 
     # CLAHE on luminance channel
     lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
-    l, a, b = cv2.split(lab)
+    lum, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l_eq = clahe.apply(l)
+    l_eq = clahe.apply(lum)
     lab_eq = cv2.merge([l_eq, a, b])
     enhanced = cv2.cvtColor(lab_eq, cv2.COLOR_LAB2RGB)
 
@@ -73,10 +74,10 @@ def enhance_plate_crop_for_ocr(plate_img):
     rgb = plate_img if is_color else cv2.cvtColor(plate_img, cv2.COLOR_GRAY2RGB)
 
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    l, a, b = cv2.split(lab)
+    lum, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
-    l = clahe.apply(l)
-    enhanced = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2RGB)
+    lum = clahe.apply(lum)
+    enhanced = cv2.cvtColor(cv2.merge([lum, a, b]), cv2.COLOR_LAB2RGB)
     enhanced = cv2.bilateralFilter(enhanced, d=5, sigmaColor=45, sigmaSpace=45)
 
     blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.1)
@@ -87,6 +88,7 @@ def enhance_plate_crop_for_ocr(plate_img):
 # ---------------------------------------------------------------------------
 # Plate-level deskew
 # ---------------------------------------------------------------------------
+
 
 def rotate_bound(image, angle, border_mode=cv2.BORDER_REPLICATE):
     """
@@ -118,7 +120,11 @@ def estimate_plate_skew_angle(plate_img):
     image coordinates. The returned value is meant to be passed directly to
     cv2.getRotationMatrix2D / rotate_bound.
     """
-    gray = cv2.cvtColor(plate_img, cv2.COLOR_RGB2GRAY) if len(plate_img.shape) == 3 else plate_img.copy()
+    gray = (
+        cv2.cvtColor(plate_img, cv2.COLOR_RGB2GRAY)
+        if len(plate_img.shape) == 3
+        else plate_img.copy()
+    )
     h, w = gray.shape[:2]
     if h < 20 or w < 40:
         return 0.0
@@ -185,7 +191,11 @@ def crop_plate_body_after_deskew(plate_img, margin=0.04):
     This uses the bright plate body contour. If no reliable plate-like contour
     is found, the original image is returned unchanged.
     """
-    gray = cv2.cvtColor(plate_img, cv2.COLOR_RGB2GRAY) if len(plate_img.shape) == 3 else plate_img.copy()
+    gray = (
+        cv2.cvtColor(plate_img, cv2.COLOR_RGB2GRAY)
+        if len(plate_img.shape) == 3
+        else plate_img.copy()
+    )
     h, w = gray.shape[:2]
     if h < 20 or w < 40:
         return plate_img
@@ -194,7 +204,9 @@ def crop_plate_body_after_deskew(plate_img, margin=0.04):
     image_area = h * w
 
     def find_best(binary, min_area_ratio, ar_range=(0.75, 6.5), penalize_border=True):
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         best_box = None
         best_score = 0.0
         for contour in contours:
@@ -244,6 +256,7 @@ def crop_plate_body_after_deskew(plate_img, margin=0.04):
     if x2 - x1 < 40 or y2 - y1 < 20:
         return plate_img
     return plate_img[y1:y2, x1:x2]
+
 
 def _order_quad_points(points):
     pts = points.reshape(4, 2).astype("float32")

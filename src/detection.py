@@ -7,28 +7,28 @@
 import torch
 from ultralytics import YOLO
 import cv2
-import numpy as np
+
 
 # ============= YOLOv8 Training Template =============
 # Chạy khi có dataset từ Member 1 (data.yaml)
 def train_yolo(data_yaml_path, epochs=50, device=None):
     """
     Train YOLOv8 on Vietnam license plate dataset.
-    
+
     Args:
         data_yaml_path: path to data.yaml
         epochs: number of epochs to train
         device: device (e.g. 0, "cpu", etc.)
-        
+
     Returns:
         str: path to best.pt weights
     """
     if device is None:
         device = 0 if torch.cuda.is_available() else "cpu"
-        
+
     # Load pre-trained YOLOv8n (nano model)
     model = YOLO("yolov8n.pt")
-    
+
     # Train
     results = model.train(
         data=data_yaml_path,
@@ -39,12 +39,13 @@ def train_yolo(data_yaml_path, epochs=50, device=None):
         patience=10,
         device=device,
     )
-    
+
     print("✅ Train xong! Best weights tại:", results.save_dir / "weights/best.pt")
     return str(results.save_dir / "weights/best.pt")
 
 
 # ============= Inference Functions =============
+
 
 def detect_plate_yolo(image, model, conf_threshold=0.25):
     """
@@ -74,10 +75,10 @@ def detect_plate_contour_fallback(image):
     """
     Fallback method: dùng contour detection khi không có YOLO model train riêng.
     Tìm các vùng hình chữ nhật có aspect ratio phù hợp với biển số Việt Nam.
-    
+
     Args:
         image: np.array (RGB scene image)
-        
+
     Returns:
         list of (x1, y1, x2, y2, aspect_ratio) — các candidates
     """

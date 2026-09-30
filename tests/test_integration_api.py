@@ -16,12 +16,19 @@ import cv2
 
 # Set env before importing app
 import os
-os.environ.setdefault("MODELS_DIR", str(PROJECT_ROOT / "models" / "ocr_hog_svm"))
+
+MODELS_DIR = str(PROJECT_ROOT / "models" / "ocr_hog_svm")
+os.environ.setdefault("MODELS_DIR", MODELS_DIR)
 os.environ.setdefault("YOLO_MODEL_PATH", "")
 
 from api.main import app
 
 client = TestClient(app)
+
+_has_models = os.path.isdir(MODELS_DIR) and os.path.exists(
+    os.path.join(MODELS_DIR, "svm_classifier.pkl")
+)
+requires_model = pytest.mark.skipif(not _has_models, reason="OCR model files not found")
 
 
 class TestHealthEndpoint:
@@ -33,6 +40,7 @@ class TestHealthEndpoint:
         assert "model_loaded" in data
         assert "uptime_seconds" in data
 
+    @requires_model
     def test_health_model_loaded(self):
         resp = client.get("/health")
         data = resp.json()
@@ -77,6 +85,7 @@ class TestPredictEndpoint:
         _, buf = cv2.imencode(".png", img)
         return io.BytesIO(buf.tobytes())
 
+    @requires_model
     def test_predict_returns_200(self):
         img_file = self._make_test_image()
         resp = client.post(

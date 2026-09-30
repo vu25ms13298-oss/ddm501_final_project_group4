@@ -125,7 +125,11 @@ def main():
     skipped = 0
 
     for row in iter_rows(args):
-        image_path = (PROJECT_ROOT / row["image"]).resolve() if not Path(row["image"]).is_absolute() else Path(row["image"])
+        image_path = (
+            (PROJECT_ROOT / row["image"]).resolve()
+            if not Path(row["image"]).is_absolute()
+            else Path(row["image"])
+        )
         label = normalize_label(row["label"])
         if not label:
             print(f"SKIP {image_path}: empty/unsupported label")

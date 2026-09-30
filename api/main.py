@@ -1,5 +1,4 @@
 import base64
-import io
 import os
 import sys
 import time
@@ -10,7 +9,6 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from prometheus_client import (
     Counter,
     Histogram,
@@ -127,9 +125,13 @@ async def track_requests(request, call_next):
     endpoint = request.url.path
     if endpoint != "/metrics":
         REQUEST_COUNT.labels(
-            method=request.method, endpoint=endpoint, status=response.status_code,
+            method=request.method,
+            endpoint=endpoint,
+            status=response.status_code,
         ).inc()
-        REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(latency)
+        REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(
+            latency
+        )
     return response
 
 

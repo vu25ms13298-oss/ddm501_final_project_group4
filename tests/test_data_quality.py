@@ -83,7 +83,9 @@ class TestMetadataQuality:
         assert accuracy >= 0.85, f"Model accuracy {accuracy} is below 85% threshold"
 
     def test_feature_dim_consistent(self, metadata):
-        dim = metadata.get("feature_dim") or metadata.get("metrics", {}).get("feature_dim")
+        dim = metadata.get("feature_dim") or metadata.get("metrics", {}).get(
+            "feature_dim"
+        )
         if dim is not None:
             assert dim > 0, "Feature dimension must be positive"
 

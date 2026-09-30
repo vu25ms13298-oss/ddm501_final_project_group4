@@ -141,11 +141,15 @@ def augment_real_char(img: np.ndarray, copies: int):
         matrix = cv2.getRotationMatrix2D((16, 16), angle, scale)
         matrix[0, 2] += random.uniform(-1.2, 1.2)
         matrix[1, 2] += random.uniform(-1.2, 1.2)
-        arr = cv2.warpAffine(arr, matrix, (32, 32), flags=cv2.INTER_CUBIC, borderValue=0)
+        arr = cv2.warpAffine(
+            arr, matrix, (32, 32), flags=cv2.INTER_CUBIC, borderValue=0
+        )
         if random.random() < 0.35:
             arr = cv2.GaussianBlur(arr, (3, 3), random.uniform(0.0, 0.6))
         if random.random() < 0.3:
-            noise = np.random.normal(0, random.uniform(3, 12), arr.shape).astype(np.int16)
+            noise = np.random.normal(0, random.uniform(3, 12), arr.shape).astype(
+                np.int16
+            )
             arr = np.clip(arr.astype(np.int16) + noise, 0, 255).astype(np.uint8)
         if random.random() < 0.25:
             _, arr = cv2.threshold(arr, random.randint(35, 90), 255, cv2.THRESH_BINARY)
@@ -182,7 +186,9 @@ def collect_labeled_char_dir(root: Path, char_list: list[str], augmentations: in
     return np.array(xs, dtype=np.uint8), np.array(ys, dtype=int)
 
 
-def collect_debug_chars(debug_dir: Path, label: str, char_list: list[str], augmentations: int):
+def collect_debug_chars(
+    debug_dir: Path, label: str, char_list: list[str], augmentations: int
+):
     if not debug_dir or not label:
         return np.empty((0, 32, 32), dtype=np.uint8), np.empty(0, dtype=int)
     label = "".join(ch for ch in label.upper() if ch in char_list)
@@ -209,7 +215,9 @@ def collect_debug_chars(debug_dir: Path, label: str, char_list: list[str], augme
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train OCR character classifier for LPR.")
+    parser = argparse.ArgumentParser(
+        description="Train OCR character classifier for LPR."
+    )
     parser.add_argument("--feature", choices=FEATURE_EXTRACTORS.keys(), default="hog")
     parser.add_argument(
         "--classifier",
@@ -220,7 +228,11 @@ def parse_args():
     parser.add_argument("--plate-style-samples-per-class", type=int, default=400)
     parser.add_argument("--emnist-per-class", type=int, default=200)
     parser.add_argument("--no-emnist", action="store_true")
-    parser.add_argument("--labeled-char-dir", type=Path, default=PROJECT_ROOT / "data" / "characters" / "labeled")
+    parser.add_argument(
+        "--labeled-char-dir",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "characters" / "labeled",
+    )
     parser.add_argument("--real-augmentations", type=int, default=60)
     parser.add_argument("--debug-char-dir", type=Path, default=None)
     parser.add_argument("--debug-label", type=str, default="")
@@ -247,8 +259,7 @@ def main():
     char_list = list(CHAR_CLASSES)
     print(f"Classes ({len(char_list)}): {''.join(char_list)}")
     print(
-        f"Training OCR model: feature={args.feature}, "
-        f"classifier={args.classifier}"
+        f"Training OCR model: feature={args.feature}, " f"classifier={args.classifier}"
     )
 
     print(f"Generating synthetic characters: {args.samples_per_class}/class")
@@ -345,13 +356,15 @@ def main():
     }
     print(f"Accuracy: {metrics['accuracy']:.4f}")
     print(f"Macro F1 : {metrics['macro_f1']:.4f}")
-    print(classification_report(
-        y_test,
-        y_pred,
-        labels=list(range(len(char_list))),
-        target_names=char_list,
-        zero_division=0,
-    ))
+    print(
+        classification_report(
+            y_test,
+            y_pred,
+            labels=list(range(len(char_list))),
+            target_names=char_list,
+            zero_division=0,
+        )
+    )
 
     save_models(
         clf,

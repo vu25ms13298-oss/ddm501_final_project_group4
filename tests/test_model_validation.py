@@ -71,9 +71,9 @@ class TestModelBehavior:
         X_scaled = scaler.transform(X)
         preds = clf.predict(X_scaled)
         unique_preds = set(preds)
-        assert len(unique_preds) >= 15, (
-            f"Model only predicts {len(unique_preds)} classes out of 31"
-        )
+        assert (
+            len(unique_preds) >= 15
+        ), f"Model only predicts {len(unique_preds)} classes out of 31"
 
     def test_prediction_shape(self, model_and_scaler, validation_data):
         clf, scaler = model_and_scaler

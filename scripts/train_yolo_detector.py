@@ -73,7 +73,9 @@ def _polygon_or_box_to_bbox(line: str):
     return xc, yc, w, h
 
 
-def prepare_bbox_dataset(src_root: Path, dst_root: Path, single_class: bool = True) -> Path:
+def prepare_bbox_dataset(
+    src_root: Path, dst_root: Path, single_class: bool = True
+) -> Path:
     """Create a bbox-only YOLO dataset from polygon labels."""
     for split in ("train", "val"):
         _link_or_copy_images(src_root / "images" / split, dst_root / "images" / split)
@@ -156,9 +158,13 @@ def main():
     if args.segment:
         data_root = args.dataset_root
         data_yaml = write_local_yaml(data_root, single_class=False)
-        base_model = args.base_model if args.base_model != "yolov8n.pt" else "yolov8n-seg.pt"
+        base_model = (
+            args.base_model if args.base_model != "yolov8n.pt" else "yolov8n-seg.pt"
+        )
     else:
-        data_root = prepare_bbox_dataset(args.dataset_root, args.output_dataset_root, single_class)
+        data_root = prepare_bbox_dataset(
+            args.dataset_root, args.output_dataset_root, single_class
+        )
         data_yaml = write_local_yaml(data_root, single_class=single_class)
         base_model = args.base_model
 

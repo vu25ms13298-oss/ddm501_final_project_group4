@@ -141,10 +141,12 @@ def correct_plate_format(text):
             return candidate
     return text
 
+
 class LPRPipeline:
     """
     Unified License Plate Recognition Pipeline.
     """
+
     def __init__(self, models_dir=None):
         self.yolo_model = None
         self.yolo_model_path = None
@@ -153,7 +155,7 @@ class LPRPipeline:
         self.feature_method = "resnet"
         self.classifier_name = "svm"
         self.char_classes = list(CHAR_CLASSES)
-        
+
         if models_dir and os.path.exists(models_dir):
             self.load_svm_models(models_dir)
 
@@ -170,14 +172,18 @@ class LPRPipeline:
             scaler_path = os.path.join(models_dir, "feature_scaler.pkl")
         if not os.path.exists(metadata_path):
             metadata_path = os.path.join(models_dir, "char_classes.json")
-        
+
         if os.path.exists(classifier_path) and os.path.exists(scaler_path):
             self.svm_model = joblib.load(classifier_path)
             self.scaler = joblib.load(scaler_path)
             if os.path.exists(metadata_path):
                 with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
-                self.char_classes = metadata.get("char_classes") or metadata.get("classes") or self.char_classes
+                self.char_classes = (
+                    metadata.get("char_classes")
+                    or metadata.get("classes")
+                    or self.char_classes
+                )
                 self.feature_method = _normalise_feature_method(
                     metadata.get("feature_method", self.feature_method)
                 )
@@ -232,7 +238,7 @@ class LPRPipeline:
         if plate_type == "2line" and line_counts:
             n_top, n_bottom = line_counts
             top = "".join(pred_chars[:n_top])
-            bottom = "".join(pred_chars[n_top:n_top + n_bottom])
+            bottom = "".join(pred_chars[n_top : n_top + n_bottom])
 
             if 3 <= len(top) <= 4:
                 score += 1.0
@@ -256,7 +262,9 @@ class LPRPipeline:
 
         return score
 
-    def _constrain_predictions(self, features_scaled, raw_preds, plate_type, line_counts=None):
+    def _constrain_predictions(
+        self, features_scaled, raw_preds, plate_type, line_counts=None
+    ):
         if not hasattr(self.svm_model, "decision_function"):
             return raw_preds
 
@@ -325,7 +333,9 @@ class LPRPipeline:
         features = self._extract_char_features(char_imgs)
         features_scaled = self.scaler.transform(features)
         raw_preds = self.svm_model.predict(features_scaled)
-        preds = self._constrain_predictions(features_scaled, raw_preds, plate_type, line_counts)
+        preds = self._constrain_predictions(
+            features_scaled, raw_preds, plate_type, line_counts
+        )
         pred_chars = [self.char_classes[p] for p in preds]
         raw_text = "".join(pred_chars)
         corrected_text = correct_plate_format(raw_text)
@@ -335,7 +345,9 @@ class LPRPipeline:
                 "predictions": pred_chars,
                 "raw_plate_string": raw_text,
                 "plate_string": corrected_text,
-                "format_score": self._plate_format_score(list(corrected_text), plate_type, line_counts),
+                "format_score": self._plate_format_score(
+                    list(corrected_text), plate_type, line_counts
+                ),
                 "success": True,
             }
         )
@@ -364,10 +376,12 @@ class LPRPipeline:
         if key in seen:
             return
         seen.add(key)
-        variants.append((
-            enhance_plate_crop_for_ocr(crop) if enhance else crop,
-            float(angle),
-        ))
+        variants.append(
+            (
+                enhance_plate_crop_for_ocr(crop) if enhance else crop,
+                float(angle),
+            )
+        )
 
     def _build_primary_ocr_crop_variants(
         self,
@@ -385,24 +399,34 @@ class LPRPipeline:
         deskew_ar = deskewed_crop.shape[1] / float(max(1, deskewed_crop.shape[0]))
         if allow_full_crop_rescue and plate_ar <= 2.2 and deskew_ar >= 2.5:
             self._add_crop_variant(variants, seen, plate_crop, 0.0, enhance=False)
-        self._add_crop_variant(variants, seen, deskewed_crop, deskew_angle, enhance=False)
+        self._add_crop_variant(
+            variants, seen, deskewed_crop, deskew_angle, enhance=False
+        )
         return variants
 
-    def _build_fallback_ocr_crop_variants(self, plate_crop, deskewed_crop, deskew_angle):
+    def _build_fallback_ocr_crop_variants(
+        self, plate_crop, deskewed_crop, deskew_angle
+    ):
         variants = []
         seen = set()
-        self._add_crop_variant(variants, seen, deskewed_crop, deskew_angle, enhance=True)
+        self._add_crop_variant(
+            variants, seen, deskewed_crop, deskew_angle, enhance=True
+        )
         self._add_crop_variant(variants, seen, plate_crop, 0.0, enhance=False)
         self._add_crop_variant(variants, seen, plate_crop, 0.0, enhance=True)
 
         if abs(deskew_angle) >= 1.0:
-            opposite = crop_plate_body_after_deskew(rotate_bound(plate_crop, -deskew_angle))
+            opposite = crop_plate_body_after_deskew(
+                rotate_bound(plate_crop, -deskew_angle)
+            )
             self._add_crop_variant(variants, seen, opposite, -deskew_angle)
 
         # Small crops from traffic photos often get an imperfect skew estimate.
         # Try a few residual rotations and let OCR/format scoring pick the best.
         for residual in (-20, -12, -6, 6, 12, 20):
-            rotated = crop_plate_body_after_deskew(rotate_bound(deskewed_crop, residual))
+            rotated = crop_plate_body_after_deskew(
+                rotate_bound(deskewed_crop, residual)
+            )
             self._add_crop_variant(variants, seen, rotated, deskew_angle + residual)
         return variants
 
@@ -432,7 +456,9 @@ class LPRPipeline:
             return False
         return candidate.get("format_score", 0.0) < 10.0
 
-    def recognize(self, image, yolo_model_path=None, assume_plate_crop=False, verbose=True):
+    def recognize(
+        self, image, yolo_model_path=None, assume_plate_crop=False, verbose=True
+    ):
         """
         Runs the End-to-End LPR Pipeline.
 
@@ -460,12 +486,14 @@ class LPRPipeline:
             if yolo_model_path is not None:
                 if self.yolo_model is None or self.yolo_model_path != yolo_model_path:
                     self.load_yolo_model(yolo_model_path)
-            
+
             if self.yolo_model is not None:
                 boxes = detect_plate_yolo(processed_img, self.yolo_model)
                 if not boxes:
                     if verbose:
-                        print("YOLO did not find a plate; falling back to contour detection")
+                        print(
+                            "YOLO did not find a plate; falling back to contour detection"
+                        )
                     boxes = [
                         (b[0], b[1], b[2], b[3], 0.5)
                         for b in detect_plate_contour_fallback(processed_img)
@@ -488,7 +516,7 @@ class LPRPipeline:
             x1, x2 = max(0, x1), min(w, x2)
             y1, y2 = max(0, y1), min(h, y2)
             plate_crop = processed_img[y1:y2, x1:x2]
-            
+
             result["bbox"] = (x1, y1, x2, y2)
             result["detection_confidence"] = conf
 
@@ -531,7 +559,9 @@ class LPRPipeline:
         )
         if self._needs_fallback(best):
             fallback_rotated, fallback_best = self._evaluate_ocr_crop_variants(
-                self._build_fallback_ocr_crop_variants(plate_crop, deskewed_crop, deskew_angle)
+                self._build_fallback_ocr_crop_variants(
+                    plate_crop, deskewed_crop, deskew_angle
+                )
             )
             if self._candidate_key(fallback_best) > self._candidate_key(best):
                 was_rotated, best = fallback_rotated, fallback_best
@@ -541,11 +571,15 @@ class LPRPipeline:
         result["deskew_angle"] = best.get("deskew_angle", deskew_angle)
 
         if verbose:
-            print(f"Plate type: {result['plate_type']} (AR={result['aspect_ratio']:.2f})")
+            print(
+                f"Plate type: {result['plate_type']} (AR={result['aspect_ratio']:.2f})"
+            )
             print(f"Segmented characters: {len(result.get('char_images') or [])}")
             print(f"{self.feature_method} features: {result.get('features_shape')}")
             print(f"Deskew angle: {result.get('deskew_angle', 0.0):.2f} deg")
-            if result.get("raw_plate_string") and result.get("raw_plate_string") != result.get("plate_string"):
+            if result.get("raw_plate_string") and result.get(
+                "raw_plate_string"
+            ) != result.get("plate_string"):
                 print(f"Raw OCR text: {result.get('raw_plate_string')}")
             print(f"Plate text: {result.get('plate_string', '')}")
             print(f"Format score: {result.get('format_score', 0.0):.2f}")

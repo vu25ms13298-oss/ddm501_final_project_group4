@@ -148,7 +148,9 @@ def candidate_from_plate(pipeline: LPRPipeline, plate_crop):
     )
     if pipeline._needs_fallback(best):
         fallback_rotated, fallback_best = pipeline._evaluate_ocr_crop_variants(
-            pipeline._build_fallback_ocr_crop_variants(plate_crop, deskewed_crop, deskew_angle)
+            pipeline._build_fallback_ocr_crop_variants(
+                plate_crop, deskewed_crop, deskew_angle
+            )
         )
         if pipeline._candidate_key(fallback_best) > pipeline._candidate_key(best):
             was_rotated, best = fallback_rotated, fallback_best
@@ -197,11 +199,20 @@ def save_contact_sheet(output_dir: Path, counts: Counter, sheet_path: Path):
         col = idx % cols
         x0 = col * cell_w
         y0 = row * (header_h + cell_h)
-        draw.rectangle([x0, y0, x0 + cell_w - 1, y0 + header_h + cell_h - 1], outline=(210, 210, 210))
-        draw.text((x0 + 4, y0 + 4), f"{ch}: {counts.get(ch, 0)}", fill=(0, 0, 0), font=font)
+        draw.rectangle(
+            [x0, y0, x0 + cell_w - 1, y0 + header_h + cell_h - 1],
+            outline=(210, 210, 210),
+        )
+        draw.text(
+            (x0 + 4, y0 + 4), f"{ch}: {counts.get(ch, 0)}", fill=(0, 0, 0), font=font
+        )
         samples = sorted((output_dir / ch).glob("*.png"))[:4]
         for sample_idx, sample_path in enumerate(samples):
-            img = Image.open(sample_path).convert("L").resize((24, 24), Image.Resampling.NEAREST)
+            img = (
+                Image.open(sample_path)
+                .convert("L")
+                .resize((24, 24), Image.Resampling.NEAREST)
+            )
             rgb = Image.new("RGB", (24, 24), "black")
             rgb.paste(Image.merge("RGB", (img, img, img)))
             sx = x0 + 4 + sample_idx * 20
@@ -212,7 +223,9 @@ def save_contact_sheet(output_dir: Path, counts: Counter, sheet_path: Path):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Build pseudo-labeled OCR chars from plate polygons.")
+    parser = argparse.ArgumentParser(
+        description="Build pseudo-labeled OCR chars from plate polygons."
+    )
     parser.add_argument(
         "--images-root",
         type=Path,
@@ -251,12 +264,13 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     image_paths = sorted(
-        p for p in args.images_root.rglob("*")
+        p
+        for p in args.images_root.rglob("*")
         if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
     )
     random.shuffle(image_paths)
     if args.max_images > 0:
-        image_paths = image_paths[:args.max_images]
+        image_paths = image_paths[: args.max_images]
 
     pipeline = LPRPipeline(models_dir=str(args.models_dir))
     counts = Counter()
@@ -273,7 +287,9 @@ def main():
             skipped["unreadable_image"] += 1
             continue
 
-        label_path = label_path_for_image(image_path, args.images_root, args.labels_root)
+        label_path = label_path_for_image(
+            image_path, args.images_root, args.labels_root
+        )
         polygons = parse_plate_polygons(label_path, image.shape)
         if not polygons:
             skipped["missing_plate_polygon"] += 1
@@ -330,7 +346,9 @@ def main():
 
                 class_dir = args.output_dir / pred
                 class_dir.mkdir(parents=True, exist_ok=True)
-                stem = safe_stem(f"{image_path.parent.name}_{image_path.stem}_p{plate_idx}_c{char_idx}_{pred}")
+                stem = safe_stem(
+                    f"{image_path.parent.name}_{image_path.stem}_p{plate_idx}_c{char_idx}_{pred}"
+                )
                 out_path = class_dir / f"{stem}.png"
                 suffix = 1
                 while out_path.exists():
@@ -338,18 +356,20 @@ def main():
                     suffix += 1
                 cv2.imwrite(str(out_path), char_img)
                 counts[pred] += 1
-                metadata_rows.append({
-                    "path": project_path(out_path),
-                    "label": pred,
-                    "source_image": project_path(image_path),
-                    "source_label": project_path(label_path),
-                    "plate_idx": plate_idx,
-                    "char_idx": char_idx,
-                    "plate_text": text,
-                    "raw_plate_text": candidate.get("raw_plate_string", ""),
-                    "plate_type": candidate.get("plate_type", ""),
-                    "margin": f"{margin:.4f}",
-                })
+                metadata_rows.append(
+                    {
+                        "path": project_path(out_path),
+                        "label": pred,
+                        "source_image": project_path(image_path),
+                        "source_label": project_path(label_path),
+                        "plate_idx": plate_idx,
+                        "char_idx": char_idx,
+                        "plate_text": text,
+                        "raw_plate_text": candidate.get("raw_plate_string", ""),
+                        "plate_type": candidate.get("plate_type", ""),
+                        "margin": f"{margin:.4f}",
+                    }
+                )
 
     for ch in CHAR_CLASSES:
         (args.output_dir / ch).mkdir(parents=True, exist_ok=True)
