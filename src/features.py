@@ -4,46 +4,58 @@
 # This module implements feature extraction using a pre-trained ResNet18 model.
 # Image 128x128 (or 32x32 resized to 224x224) -> ResNet18 -> feature vector 1x512.
 
-import torch
-import torch.nn as nn
-from torchvision import models, transforms
 import numpy as np
 import cv2
 
 
-class ResNet18FeatureExtractor(nn.Module):
+def _import_torch():
+    import torch
+    import torch.nn as nn
+    from torchvision import models, transforms
+
+    return torch, nn, models, transforms
+
+
+class ResNet18FeatureExtractor:
     """
     Wrapper cho ResNet18 pre-trained: bỏ FC layer cuối, output 512-d feature.
     """
 
     def __init__(self):
-        super().__init__()
-        # Load pre-trained ResNet18
+        torch, nn, models, _ = _import_torch()
         backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-        # Bỏ avgpool và fc — ta giữ lại tới layer trước fc
-        self.features = nn.Sequential(*list(backbone.children())[:-1])  # đến avgpool
-        self.eval()
+        self.features = nn.Sequential(*list(backbone.children())[:-1])
+        self.features.eval()
 
-    def forward(self, x):
+    def __call__(self, x):
+        torch, _, _, _ = _import_torch()
         with torch.no_grad():
-            feat = self.features(x)  # [B, 512, 1, 1]
-            feat = feat.view(feat.size(0), -1)  # [B, 512]
+            feat = self.features(x)
+            feat = feat.view(feat.size(0), -1)
         return feat
 
+    def to(self, device):
+        self.features = self.features.to(device)
+        return self
 
-# Global settings for device, transform and encoder initialization
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Transform để đưa ảnh ký tự (grayscale 32x32) về dạng input của ResNet (RGB 224x224)
-char_transform = transforms.Compose(
-    [
-        transforms.ToPILImage(),
-        transforms.Resize((224, 224)),
-        transforms.Grayscale(num_output_channels=3),  # 1 channel → 3 channel
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
+def _get_device():
+    torch, _, _, _ = _import_torch()
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _get_char_transform():
+    _, _, _, transforms = _import_torch()
+    return transforms.Compose(
+        [
+            transforms.ToPILImage(),
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
 
 # Initialize global encoder instance, lazily or statically
 _encoder = None
@@ -54,10 +66,11 @@ def get_encoder():
     global _encoder
     if _encoder is None:
         try:
+            device = _get_device()
             _encoder = ResNet18FeatureExtractor().to(device)
-            print("✅ ResNet18 Feature Extractor loaded successfully.")
+            print("ResNet18 Feature Extractor loaded successfully.")
         except Exception as e:
-            print(f"❌ Error loading ResNet18 model: {e}")
+            print(f"Error loading ResNet18 model: {e}")
             raise e
     return _encoder
 
@@ -74,9 +87,13 @@ def extract_features(char_imgs, batch_size=64, encoder_model=None):
     Returns:
         np.array shape (N, 512)
     """
+    torch, _, _, _ = _import_torch()
+
     if len(char_imgs) == 0:
         return np.zeros((0, 512), dtype=np.float32)
 
+    device = _get_device()
+    char_transform = _get_char_transform()
     encoder = encoder_model if encoder_model is not None else get_encoder()
 
     features_list = []

@@ -20,10 +20,10 @@
                         │  └───────────┘    └──────────────────┘     │
                         │                                             │
                         │  ┌───────────┐    ┌──────────────────┐     │
-                        │  │  MLflow   │───>│     MinIO         │     │
-                        │  │  :5000    │    │   :9000/:9001     │     │
-                        │  └─────┬─────┘    └──────────────────┘     │
-                        │        │                                    │
+                        │  │  MLflow   │    │   Airflow         │     │
+                        │  │  :5000    │<───│   :8080           │     │
+                        │  └─────┬─────┘    │ (Pipeline Orch.)  │     │
+                        │        │          └──────────────────┘     │
                         │  ┌─────┴─────┐                              │
                         │  │PostgreSQL │                              │
                         │  │  :5432    │                              │
@@ -97,8 +97,22 @@ Input Image (RGB)
 **Responsibility**: Track training experiments, model versioning, and artifact storage.
 
 - Backend store: PostgreSQL (parameters, metrics, run metadata)
-- Artifact store: MinIO S3-compatible (model files, plots, reports)
+- Artifact store: local filesystem volume (model files, plots, reports)
 - Model registry for versioning and stage promotion
+
+### 2.6. Apache Airflow (Pipeline Orchestration)
+**Responsibility**: Orchestrate and schedule ML training pipelines.
+
+- Standalone mode with SQLite backend (lightweight, no extra infra)
+- DAG: `lpr_training_pipeline` with 6 tasks in sequence:
+  1. `generate_data` — Synthetic character generation (250 + 400 samples/class)
+  2. `validate_data` — Data quality checks (NaN, value range, class count)
+  3. `extract_features` — HOG feature extraction from images
+  4. `train` — SVM training with 5-fold CV, logged to MLflow
+  5. `evaluate` — Accuracy/F1 metrics, classification report
+  6. `register_model` — Conditional model registration (accuracy > 85%)
+- Scheduled `@weekly`, integrates with MLflow for experiment tracking
+- Web UI at port 8080 for pipeline monitoring and manual triggers
 
 ### 2.4. Monitoring Stack
 **Responsibility**: Real-time system and model performance monitoring.
@@ -159,7 +173,7 @@ Push/PR → Lint (ruff, black) → Unit Tests → Data Quality Tests
 | Experiment Tracking| MLflow          | Industry standard, model registry, artifact management     |
 | Metrics            | Prometheus      | Pull-based, time-series DB, PromQL, AlertManager-ready     |
 | Visualization      | Grafana         | Rich dashboards, Prometheus integration, alerting          |
-| Artifact Storage   | MinIO           | S3-compatible, self-hosted, no cloud dependency            |
+| Pipeline Orchestration | Apache Airflow | DAG-based scheduling, web UI, MLflow integration       |
 | CI/CD              | GitHub Actions  | Native GitHub integration, free for public repos           |
 | Explainability     | SHAP + LIME     | Model-agnostic, complementary global/local explanations    |
 

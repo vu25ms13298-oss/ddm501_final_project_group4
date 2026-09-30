@@ -110,11 +110,50 @@ services:
     networks:
       - lpr_network
 
+  # ---- Apache Airflow (ML pipeline orchestration) ----
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: lpr_airflow
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__WEBSERVER__SECRET_KEY: lpr-airflow-secret-key
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./models:/opt/airflow/models
+      - ./data:/opt/airflow/data
+      - airflow_data:/opt/airflow
+    ports:
+      - "8080:8080"
+    command: airflow standalone
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    networks:
+      - lpr_network
+
 volumes:
   postgres_data:
   mlflow_artifacts:
   prometheus_data:
   grafana_data:
+  airflow_data:
 
 networks:
   lpr_network:

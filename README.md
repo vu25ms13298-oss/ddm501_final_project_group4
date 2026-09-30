@@ -92,9 +92,15 @@ The system is deployed as a REST API with full MLOps infrastructure: experiment 
        └──────────────┘          └─────────────────┘
 
        ┌──────────────┐     ┌──────────────┐
-       │   MLflow     │     │   MinIO      │
-       │  (Tracking)  │────>│ (Artifacts)  │
-       └──────────────┘     └──────────────┘
+       │   MLflow     │     │   Airflow    │
+       │  (Tracking)  │<────│ (Pipeline    │
+       │  + Registry  │     │  Orchestration)│
+       └──────┬───────┘     └──────────────┘
+              │
+       ┌──────┴───────┐
+       │  PostgreSQL  │
+       │  (Backend)   │
+       └──────────────┘
 ```
 
 ## Quick Start
@@ -119,9 +125,9 @@ docker compose up -d --build
 | API        | http://localhost:8000  | —               |
 | API Docs   | http://localhost:8000/docs | —           |
 | MLflow     | http://localhost:5000  | —               |
+| Airflow    | http://localhost:8080  | admin / admin   |
 | Prometheus | http://localhost:9090  | —               |
 | Grafana    | http://localhost:3000  | admin / admin   |
-| MinIO      | http://localhost:9001  | minio / minio123|
 
 ### 3. Test the API
 
@@ -187,6 +193,10 @@ license-plate-recognition/
 │   └── yolo_runs/                # YOLO training outputs
 ├── mlflow/                       # MLflow tracking server
 │   └── Dockerfile
+├── airflow/                      # Airflow pipeline orchestration
+│   └── Dockerfile
+├── dags/                         # Airflow DAG definitions
+│   └── lpr_training_pipeline.py  # OCR training pipeline (6 tasks)
 ├── config/                       # Monitoring configuration
 │   ├── prometheus.yml
 │   ├── prometheus/alert_rules.yml
@@ -337,6 +347,8 @@ pytest tests/ -v
 
 **API returns 503**: The model files are not found. Ensure `models/ocr_hog_svm/` contains `classifier.joblib` and `scaler.joblib`.
 
-**MLflow connection refused**: Wait for PostgreSQL and MinIO to be healthy before MLflow starts. Run `docker compose logs mlflow` to check.
+**MLflow connection refused**: Wait for PostgreSQL to be healthy before MLflow starts. Run `docker compose logs mlflow` to check.
+
+**Airflow DAG not visible**: Wait ~60 seconds after startup for Airflow to parse DAGs. Check `docker compose logs airflow` for errors.
 
 **Grafana shows no data**: Verify Prometheus is scraping the API: visit http://localhost:9090/targets.
