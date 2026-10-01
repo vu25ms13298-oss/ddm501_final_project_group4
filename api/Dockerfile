@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 COPY api/requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch==2.4.0+cpu torchvision==0.19.0+cpu \
+    -r requirements.txt
 
 # ---- Stage 2: Runtime ----
 FROM python:3.10-slim AS runtime
