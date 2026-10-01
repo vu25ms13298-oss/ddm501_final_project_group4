@@ -93,7 +93,10 @@ def load_pipeline():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pipeline
-    pipeline = load_pipeline()
+    try:
+        pipeline = load_pipeline()
+    except Exception as exc:
+        print(f"WARNING: Failed to load pipeline: {exc}")
     yield
 
 
@@ -215,10 +218,6 @@ async def predict(
     t0 = time.time()
     endpoint = "/predict"
 
-    if pipeline is None:
-        PREDICTION_ERRORS.labels(error_type="model_not_loaded").inc()
-        raise HTTPException(status_code=503, detail="Model not loaded")
-
     contents = await file.read()
     if not contents:
         PREDICTION_ERRORS.labels(error_type="empty_file").inc()
@@ -233,6 +232,10 @@ async def predict(
     except Exception:
         PREDICTION_ERRORS.labels(error_type="invalid_image").inc()
         raise HTTPException(status_code=400, detail="Invalid image file")
+
+    if pipeline is None:
+        PREDICTION_ERRORS.labels(error_type="model_not_loaded").inc()
+        raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
         result = pipeline.recognize(
@@ -277,10 +280,6 @@ async def predict_base64(
     t0 = time.time()
     endpoint = "/predict/base64"
 
-    if pipeline is None:
-        PREDICTION_ERRORS.labels(error_type="model_not_loaded").inc()
-        raise HTTPException(status_code=503, detail="Model not loaded")
-
     image_b64 = payload.get("image")
     if not image_b64:
         raise HTTPException(status_code=400, detail="Missing 'image' field (base64)")
@@ -297,6 +296,10 @@ async def predict_base64(
     except Exception:
         PREDICTION_ERRORS.labels(error_type="invalid_image").inc()
         raise HTTPException(status_code=400, detail="Invalid base64 image")
+
+    if pipeline is None:
+        PREDICTION_ERRORS.labels(error_type="model_not_loaded").inc()
+        raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
         result = pipeline.recognize(

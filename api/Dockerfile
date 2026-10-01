@@ -32,7 +32,7 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 ENV MODELS_DIR=/app/models/ocr_hog_svm
-ENV YOLO_MODEL_PATH=""
+ENV YOLO_MODEL_PATH=/app/models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt
 ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

@@ -26,3 +26,52 @@ jobs:
 
       - name: Check Black formatting
         run: black --check src/ api/ scripts/ tests/ responsible_ai/
+
+  test:
+    name: Run Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=src --cov=api \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=55
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build -f api/Dockerfile -t lpr-api:test .
+      - run: docker build -f mlflow/Dockerfile -t lpr-mlflow:test .
+      - run: docker build -f airflow/Dockerfile -t lpr-airflow:test .

@@ -4,9 +4,14 @@
 # This module implements license plate detection using YOLOv8,
 # with a contour-based fallback algorithm for demo/fallback purposes.
 
-import torch
-from ultralytics import YOLO
 import cv2
+
+try:
+    import torch
+    from ultralytics import YOLO
+except ImportError:
+    torch = None
+    YOLO = None
 
 
 # ============= YOLOv8 Training Template =============

@@ -52,7 +52,7 @@ services:
         condition: service_healthy
     environment:
       MODELS_DIR: /app/models/ocr_hog_svm
-      YOLO_MODEL_PATH: ""
+      YOLO_MODEL_PATH: /app/models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt
       MLFLOW_TRACKING_URI: http://mlflow:5000
     ports:
       - "8000:8000"

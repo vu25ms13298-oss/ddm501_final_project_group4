@@ -12,10 +12,32 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import json
+
 from src.classifier import CHAR_CLASSES, generate_synthetic_chars
-from src.features import extract_hog_features
+from src.features import extract_hog_features, extract_hog_legacy_features
 
 MODELS_DIR = PROJECT_ROOT / "models" / "ocr_hog_svm"
+
+
+def _get_feature_extractor():
+    meta_path = MODELS_DIR / "metadata.json"
+    if meta_path.exists():
+        with open(meta_path) as f:
+            method = json.load(f).get("feature_method", "hog")
+        if method == "hog_legacy":
+            return extract_hog_legacy_features
+    scaler_path = MODELS_DIR / "scaler.joblib"
+    if not scaler_path.exists():
+        scaler_path = MODELS_DIR / "feature_scaler.pkl"
+    if scaler_path.exists():
+        scaler = joblib.load(scaler_path)
+        if hasattr(scaler, "n_features_in_") and scaler.n_features_in_ == 324:
+            return extract_hog_legacy_features
+    return extract_hog_features
+
+
+_extract = _get_feature_extractor()
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +64,7 @@ def validation_data():
         samples_per_class=20,
         img_size=64,
     )
-    features = extract_hog_features(x_imgs)
+    features = _extract(x_imgs)
     return features, y_labels
 
 
@@ -104,7 +126,7 @@ class TestModelRobustness:
     def test_handles_noisy_input(self, model_and_scaler):
         clf, scaler = model_and_scaler
         noisy = [np.random.randint(0, 255, (32, 32), dtype=np.uint8) for _ in range(10)]
-        features = extract_hog_features(noisy)
+        features = _extract(noisy)
         X_scaled = scaler.transform(features)
         preds = clf.predict(X_scaled)
         assert len(preds) == 10
@@ -112,7 +134,7 @@ class TestModelRobustness:
     def test_handles_blank_input(self, model_and_scaler):
         clf, scaler = model_and_scaler
         blank = [np.zeros((32, 32), dtype=np.uint8) for _ in range(5)]
-        features = extract_hog_features(blank)
+        features = _extract(blank)
         X_scaled = scaler.transform(features)
         preds = clf.predict(X_scaled)
         assert len(preds) == 5
@@ -120,7 +142,7 @@ class TestModelRobustness:
     def test_handles_white_input(self, model_and_scaler):
         clf, scaler = model_and_scaler
         white = [np.full((32, 32), 255, dtype=np.uint8) for _ in range(5)]
-        features = extract_hog_features(white)
+        features = _extract(white)
         X_scaled = scaler.transform(features)
         preds = clf.predict(X_scaled)
         assert len(preds) == 5

@@ -10,7 +10,11 @@ import json
 import os
 import re
 import joblib
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
 from .preprocessing import (
     preprocess_scene_image,
@@ -200,6 +204,9 @@ class LPRPipeline:
 
     def load_yolo_model(self, yolo_model_path):
         """Loads the YOLOv8 model for detection."""
+        if YOLO is None:
+            print("ultralytics not installed; YOLO detection disabled")
+            return
         self.yolo_model = YOLO(yolo_model_path)
         self.yolo_model_path = yolo_model_path
         print(f"Loaded YOLO model: {yolo_model_path}")

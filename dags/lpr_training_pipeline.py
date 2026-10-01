@@ -4,6 +4,7 @@ LPR OCR Training Pipeline — Airflow DAG
 Six tasks: generate_data -> validate_data -> extract_features -> train -> evaluate -> register
 Trains the HOG+SVM OCR classifier and logs everything to MLflow.
 """
+
 from __future__ import annotations
 
 import json
@@ -137,8 +138,12 @@ def lpr_training_pipeline():
         if n_classes < 31:
             raise AirflowFailException(f"Only {n_classes} classes, expected 31")
 
-        log.info("Validation passed: %d samples, %d classes, imbalance=%.2f",
-                 len(images), n_classes, imbalance_ratio)
+        log.info(
+            "Validation passed: %d samples, %d classes, imbalance=%.2f",
+            len(images),
+            n_classes,
+            imbalance_ratio,
+        )
         return report
 
     @task
@@ -196,7 +201,9 @@ def lpr_training_pipeline():
 
             clf = SVC(kernel="rbf", C=10, gamma="scale", random_state=SEED)
 
-            cv_scores = cross_val_score(clf, X_train_s, y_train, cv=3, scoring="f1_macro")
+            cv_scores = cross_val_score(
+                clf, X_train_s, y_train, cv=3, scoring="f1_macro"
+            )
             mlflow.log_metric("cv_mean_f1", round(float(cv_scores.mean()), 4))
             mlflow.log_metric("cv_std_f1", round(float(cv_scores.std()), 4))
             log.info("CV F1: %.4f ± %.4f", cv_scores.mean(), cv_scores.std())
@@ -208,6 +215,7 @@ def lpr_training_pipeline():
             np.save(str(out / "y_pred.npy"), y_pred)
 
             import joblib
+
             joblib.dump(clf, str(out / "svm_classifier.pkl"))
             joblib.dump(scaler, str(out / "feature_scaler.pkl"))
 
@@ -252,23 +260,37 @@ def lpr_training_pipeline():
     def register_model(eval_meta: dict, ds: str = None) -> str:
         """Register model in MLflow if accuracy meets threshold."""
         import mlflow
+        import mlflow.sklearn
+        import joblib
 
         accuracy = eval_meta["accuracy"]
         run_id = eval_meta["mlflow_run_id"]
         out = run_dir(ds)
 
         if accuracy < MIN_ACCURACY:
-            msg = f"Accuracy {accuracy:.4f} below threshold {MIN_ACCURACY}. Model NOT registered."
+            msg = (
+                f"Accuracy {accuracy:.4f} below threshold "
+                f"{MIN_ACCURACY}. Model NOT registered."
+            )
             log.warning(msg)
             return msg
 
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
+        clf = joblib.load(str(out / "svm_classifier.pkl"))
         with mlflow.start_run(run_id=run_id):
+            mv = mlflow.sklearn.log_model(
+                clf,
+                artifact_path="ocr_model",
+                registered_model_name=MLFLOW_MODEL_NAME,
+            )
             mlflow.set_tag("registered", "true")
-            mlflow.set_tag("model_name", MLFLOW_MODEL_NAME)
 
-        msg = f"Model passed threshold (accuracy={accuracy:.4f}). Tagged in MLflow run {run_id}."
+        client = mlflow.MlflowClient()
+        versions = client.get_registered_model(MLFLOW_MODEL_NAME).latest_versions
+        version = max(int(v.version) for v in versions)
+
+        msg = f"Registered {MLFLOW_MODEL_NAME} v{version} " f"(accuracy={accuracy:.4f})"
         log.info(msg)
 
         summary = {
@@ -276,6 +298,8 @@ def lpr_training_pipeline():
             "accuracy": accuracy,
             "macro_f1": eval_meta["macro_f1"],
             "mlflow_run_id": run_id,
+            "model_version": version,
+            "model_uri": mv.model_uri,
             "registered": True,
         }
         (out / "summary.json").write_text(json.dumps(summary, indent=2))

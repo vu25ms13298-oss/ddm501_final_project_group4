@@ -35,12 +35,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r api/requirements.txt
-          pip install pytest pytest-cov httpx
+          pip install -r requirements-ci.txt
       - name: Run tests with coverage
         run: pytest tests/ -v --tb=short --cov=src --cov=api --cov-report=xml --cov-report=term-missing
       - name: Upload coverage report
