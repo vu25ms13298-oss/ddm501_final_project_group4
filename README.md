@@ -121,14 +121,16 @@ docker compose up -d --build
 
 ### 2. Verify Services
 
-| Service    | URL                    | Credentials     |
-|------------|------------------------|-----------------|
-| API        | http://localhost:8000  | —               |
-| API Docs   | http://localhost:8000/docs | —           |
-| MLflow     | http://localhost:5000  | —               |
-| Airflow    | http://localhost:8080  | admin / admin   |
-| Prometheus | http://localhost:9090  | —               |
-| Grafana    | http://localhost:3000  | admin / admin   |
+| Service       | URL                         | Credentials     |
+|---------------|-----------------------------|-----------------|
+| API           | http://localhost:8000       | —               |
+| API Docs      | http://localhost:8000/docs  | —               |
+| MLflow        | http://localhost:5000       | —               |
+| MinIO S3 API  | http://localhost:9000       | minio / minio123 |
+| MinIO Console | http://localhost:9001       | minio / minio123 |
+| Airflow       | http://localhost:8080       | admin / admin   |
+| Prometheus    | http://localhost:9090       | —               |
+| Grafana       | http://localhost:3000       | admin / admin   |
 
 ### 3. Test the API
 
@@ -323,11 +325,42 @@ MLflow UI at http://localhost:5000 tracks:
   baked-in `models/ocr_hog_svm`; `/model/info` reports `model_source` and
   `model_version`.
 
-The Airflow DAG `lpr_training_pipeline` automates the same loop weekly:
-train → evaluate → register → promote only if it beats the current champion →
-`/model/reload`.
+The system includes two automated Airflow pipelines:
+- **`lpr_training_pipeline`** (@weekly): Automates the continuous training loop:
+  generate synthetic data → validate quality → extract HOG features → train SVM with CV →
+  evaluate → register to MLflow → promote to `@production` (Champion/Challenger) →
+  hot-reload API.
+- **`lpr_monitoring_pipeline`** (every 15 min): Automates health and drift oversight:
+  check API health & model consistency → perform canary prediction → query sliding-window
+  Prometheus metrics → evaluate against drift thresholds → write JSON report → optionally
+  trigger retraining if drift is detected (`AUTO_RETRAIN_ON_DRIFT=true`).
+
+## Traffic & Drift Simulations
+
+A dedicated simulation toolkit (`simulations/`) allows testing the entire system under realistic traffic loads and induced environmental drift:
+
+```bash
+cd simulations
+pip install -r requirements.txt
+
+# Run a baseline simulation (60 requests @ 0.8 rps):
+python run_simulation.py -n 60 -s normal
+
+# Run specific scenarios (1 to 7):
+python scenarios.py 2   # Nightfall (gradual brightness drop)
+python scenarios.py 3   # Camera Swap (sudden resolution shift)
+python scenarios.py 5   # Prediction Drift (non-plate images)
+python scenarios.py 6   # Traffic Spike (triggers HTTP 429 rate limit)
+
+# Run end-to-end stack smoke test:
+# Windows PowerShell: .\quick_test.ps1
+# Linux / macOS:      ./quick_test.sh
+```
+
+Observe live Grafana dashboards (`http://localhost:3000`) and Prometheus alert states (`http://localhost:9090/alerts`) as scenarios execute.
 
 ## End-to-End Benchmark
+
 
 Real labelled plate images are not committed (the Roboflow detection dataset is
 referenced in `dataset/data.yaml`). For a reproducible end-to-end regression check,
