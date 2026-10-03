@@ -1,13 +1,10 @@
-train: ../train/images
-val: ../valid/images
-test: ../test/images
+path: dataset
+train: images/train
+val: images/val
 
 nc: 2
-names: ['license-plate-long', 'license-plate-short']
+names: ['BSD', 'BSV']
 
-roboflow:
-  workspace: dan-nguyen-dinh
-  project: vietnamese-license-plate-ypfnp-jvsby
-  version: 1
-  license: CC BY 4.0
-  url: https://universe.roboflow.com/dan-nguyen-dinh/vietnamese-license-plate-ypfnp-jvsby/dataset/1
+# BSD = Bien So Dai (bien 1 dong, hinh chu nhat ngang, AR > 2.5)
+# BSV = Bien So Vuong (bien 2 dong, hinh vuong, AR <= 2.5)
+# Sample: 10 images (7 train + 3 val) from full dataset (3433 train + 1145 val)
