@@ -172,7 +172,9 @@ services:
       - airflow_data:/opt/airflow
     ports:
       - "8080:8080"
-    command: airflow standalone
+    # /opt/airflow is a named volume, so a webserver PID file left by a previous
+    # container survives restarts and blocks the webserver ("Already running").
+    command: bash -c "rm -f /opt/airflow/airflow-webserver*.pid && exec airflow standalone"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
