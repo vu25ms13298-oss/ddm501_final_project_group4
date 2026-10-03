@@ -113,6 +113,18 @@ def parse_args():
         type=Path,
         default=PROJECT_ROOT / "results" / "ocr_eval_exact_plate_accuracy.csv",
     )
+    parser.add_argument(
+        "--min-exact-accuracy",
+        type=float,
+        default=None,
+        help="Exit non-zero if any model's exact plate accuracy is below this",
+    )
+    parser.add_argument(
+        "--min-char-accuracy",
+        type=float,
+        default=None,
+        help="Exit non-zero if any model's normalized char accuracy is below this",
+    )
     return parser.parse_args()
 
 
@@ -120,8 +132,11 @@ def main():
     args = parse_args()
     rows = read_manifest(args.manifest)
     model_specs = args.model or [
-        "hog324_real_mix=models/ocr_eval_hog324_real_mix",
+        "ocr_hog_svm=models/ocr_hog_svm",
     ]
+    # Only use YOLO when weights exist; otherwise the contour fallback is used.
+    yolo_path = str(args.yolo_model) if args.yolo_model.exists() else None
+    failures = []
 
     output_rows = []
     for model_spec in model_specs:
@@ -147,7 +162,7 @@ def main():
             else:
                 result = pipeline.recognize(
                     image_rgb,
-                    yolo_model_path=None if assume_plate_crop else str(args.yolo_model),
+                    yolo_model_path=None if assume_plate_crop else yolo_path,
                     assume_plate_crop=assume_plate_crop,
                     verbose=False,
                 )
@@ -186,6 +201,10 @@ def main():
             f"{model_name}: exact={exact}/{attempted} "
             f"({exact_acc:.2%}), normalized_char_accuracy={char_acc:.2%}"
         )
+        if args.min_exact_accuracy is not None and exact_acc < args.min_exact_accuracy:
+            failures.append(f"{model_name}: exact {exact_acc:.2%}")
+        if args.min_char_accuracy is not None and char_acc < args.min_char_accuracy:
+            failures.append(f"{model_name}: char {char_acc:.2%}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -205,7 +224,11 @@ def main():
         writer.writeheader()
         writer.writerows(output_rows)
     print(f"Saved detail CSV: {args.output}")
+    if failures:
+        print("Quality gate FAILED: " + "; ".join(failures))
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
