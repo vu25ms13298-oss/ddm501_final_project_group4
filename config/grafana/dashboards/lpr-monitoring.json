@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,8 +11,16 @@
     {
       "title": "API Requests per Second",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "rate(api_requests_total[1m])",
@@ -18,15 +28,25 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" },
+        "defaults": {
+          "unit": "reqps"
+        },
         "overrides": []
       }
     },
     {
       "title": "Prediction Latency (p50, p95, p99)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, rate(model_prediction_latency_seconds_bucket[5m]))",
@@ -42,15 +62,25 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" },
+        "defaults": {
+          "unit": "s"
+        },
         "overrides": []
       }
     },
     {
       "title": "Total Predictions by Plate Type",
       "type": "piechart",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "model_predictions_total",
@@ -61,8 +91,16 @@
     {
       "title": "Prediction Errors",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "rate(model_prediction_errors_total[5m])",
@@ -70,15 +108,25 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "errors/s" },
+        "defaults": {
+          "unit": "errors/s"
+        },
         "overrides": []
       }
     },
     {
       "title": "Detection Confidence Distribution",
       "type": "histogram",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "detection_confidence_bucket",
@@ -89,8 +137,16 @@
     {
       "title": "Characters Detected per Plate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.5, rate(plate_char_count_bucket[5m]))",
@@ -105,8 +161,16 @@
     {
       "title": "API Uptime",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "up{job=\"lpr-api\"}",
@@ -116,8 +180,24 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "options": { "0": { "text": "DOWN", "color": "red" } }, "type": "value" },
-            { "options": { "1": { "text": "UP", "color": "green" } }, "type": "value" }
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              },
+              "type": "value"
+            }
           ]
         },
         "overrides": []
@@ -126,8 +206,16 @@
     {
       "title": "Model Info",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "model_info",
@@ -138,20 +226,159 @@
     {
       "title": "Request Latency Heatmap",
       "type": "heatmap",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
       "targets": [
         {
           "expr": "rate(api_request_latency_seconds_bucket[5m])",
           "legendFormat": "{{le}}"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Data & Prediction Drift",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Recognition Success Rate",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-datasource"
+          },
+          "expr": "sum(rate(plate_recognition_result_total{result=\"success\"}[15m])) / sum(rate(plate_recognition_result_total[15m]))",
+          "legendFormat": "success rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input Brightness (1h vs 7d baseline)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-datasource"
+          },
+          "expr": "rate(input_image_brightness_sum[1h]) / rate(input_image_brightness_count[1h])",
+          "legendFormat": "mean 1h",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-datasource"
+          },
+          "expr": "rate(input_image_brightness_sum[7d]) / rate(input_image_brightness_count[7d])",
+          "legendFormat": "baseline 7d",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input Width (1h vs 7d baseline)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-datasource"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "px"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-datasource"
+          },
+          "expr": "rate(input_image_width_pixels_sum[1h]) / rate(input_image_width_pixels_count[1h])",
+          "legendFormat": "mean 1h",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-datasource"
+          },
+          "expr": "rate(input_image_width_pixels_sum[7d]) / rate(input_image_width_pixels_count[7d])",
+          "legendFormat": "baseline 7d",
+          "refId": "B"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,
-  "tags": ["lpr", "ml-monitoring"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "lpr",
+    "ml-monitoring"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "title": "LPR System Monitoring",
   "uid": "lpr-monitoring",
   "version": 1

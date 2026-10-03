@@ -66,6 +66,48 @@ groups:
           summary: "No predictions in the last 30 minutes"
           description: "The API has not received any prediction requests."
 
+  - name: drift_alerts
+    rules:
+      # Prediction drift: share of outputs that match a valid plate format.
+      - alert: LowRecognitionSuccessRate
+        expr: |
+          sum(rate(plate_recognition_result_total{result="success"}[30m]))
+            / sum(rate(plate_recognition_result_total[30m])) < 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recognition success rate below 50%"
+          description: "Only {{ $value | humanizePercentage }} of recent predictions produced a valid plate format."
+
+      # Data drift: mean input brightness (1h) deviates >30% from the 7-day baseline.
+      - alert: InputBrightnessDrift
+        expr: |
+          abs(1 - (
+            (rate(input_image_brightness_sum[1h]) / rate(input_image_brightness_count[1h]))
+            / (rate(input_image_brightness_sum[7d]) / rate(input_image_brightness_count[7d]))
+          )) > 0.3
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Input image brightness drifted from 7-day baseline"
+          description: "Mean brightness differs from the 7-day baseline by {{ $value | humanizePercentage }}."
+
+      # Data drift: mean input width (1h) deviates >50% from the 7-day baseline.
+      - alert: InputResolutionDrift
+        expr: |
+          abs(1 - (
+            (rate(input_image_width_pixels_sum[1h]) / rate(input_image_width_pixels_count[1h]))
+            / (rate(input_image_width_pixels_sum[7d]) / rate(input_image_width_pixels_count[7d]))
+          )) > 0.5
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Input image resolution drifted from 7-day baseline"
+          description: "Mean image width differs from the 7-day baseline by {{ $value | humanizePercentage }}."
+
   - name: system_alerts
     rules:
       - alert: PrometheusTargetDown
