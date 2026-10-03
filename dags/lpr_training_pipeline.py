@@ -172,7 +172,7 @@ def lpr_training_pipeline():
         }
 
     @task
-    def train(feature_meta: dict, ds: str = None) -> dict:
+    def train(feature_meta: dict, ds: str = None, **context) -> dict:
         """Train SVM classifier and log to MLflow."""
         import mlflow
         from sklearn.model_selection import cross_val_score, train_test_split
@@ -194,7 +194,11 @@ def lpr_training_pipeline():
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
+        dag_run = context.get("dag_run")
+        trigger_reason = (dag_run.conf or {}).get("reason", "scheduled") if dag_run else "scheduled"
+
         with mlflow.start_run(run_name=f"lpr-ocr-{ds}") as run:
+            mlflow.set_tag("trigger_reason", trigger_reason)
             mlflow.log_param("feature_method", "hog")
             mlflow.log_param("classifier", "svm")
             mlflow.log_param("samples_per_class", SAMPLES_PER_CLASS)
