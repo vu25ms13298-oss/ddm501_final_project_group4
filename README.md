@@ -108,11 +108,13 @@ The system is deployed as a REST API with full MLOps infrastructure: experiment 
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.10+ (for local development)
-- Git
+- Git and **[Git LFS](https://git-lfs.com)** — model binaries (`models/**/*.pkl`,
+  `*.joblib`, `*.pt`) are stored in LFS, see `.gitattributes`
 
 ### 1. Clone and Start Services
 
 ```bash
+git lfs install        # once per machine, before cloning
 git clone https://github.com/vu25ms13298-oss/ddm501_final_project_group4.git
 cd ddm501_final_project_group4
 cp .env.example .env   # optional: set API_ADMIN_TOKEN to enable /model/reload
@@ -367,7 +369,7 @@ pytest tests/ --cov=src --cov=api --cov-report=term-missing
 docker compose run --rm -v "$PWD:/app" trainer pytest tests/ --cov=src --cov=api
 ```
 
-Current result: 102 tests, 80.8% line coverage (`src/` + `api/`). Uncovered code is
+Current result: 106 tests, 80.8% line coverage (`src/` + `api/`). Uncovered code is
 mostly the optional ResNet18/YOLO-training paths that need torch, which CI does
 not install.
 
@@ -414,7 +416,9 @@ pytest tests/ -v
 
 **API returns 503**: The model files are not found. Ensure `models/ocr_hog_svm/` contains `svm_classifier.pkl`, `feature_scaler.pkl` and `metadata.json` (or promote a model to `@production` in MLflow).
 
-**`yolo_loaded: false`**: YOLO weights are not committed to the repo. Put `best.pt` at `models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt` (mounted read-only into the API container) and run `docker compose restart api`. Without weights the API uses the contour-based fallback detector.
+**"… is a Git LFS pointer, not the model file"** (or `models/**/*.pkl` / `best.pt` are ~130-byte text files): the repo was cloned without Git LFS. Run `git lfs install && git lfs pull`, then `docker compose up -d --build api`.
+
+**`yolo_loaded: false`**: `models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt` is missing or still an LFS pointer (see above). The directory is mounted read-only into the API container; after fixing it run `docker compose restart api`. Without weights the API uses the contour-based fallback detector.
 
 **Synthetic data looks wrong / RuntimeWarning about fonts**: the character generator needs TrueType fonts. Install `fonts-dejavu-core` (already included in the trainer and Airflow images).
 

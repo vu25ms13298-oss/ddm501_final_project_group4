@@ -1,0 +1,21 @@
+name: Pull Git LFS files (cached)
+description: >
+  Restores Git LFS objects from the Actions cache before `git lfs pull`, so CI
+  only downloads model files from LFS when they change (GitHub's free LFS
+  bandwidth quota is small). Run after actions/checkout.
+runs:
+  using: composite
+  steps:
+    - name: List LFS objects
+      shell: bash
+      run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+    - name: Restore LFS cache
+      uses: actions/cache@v4
+      with:
+        path: .git/lfs
+        key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+    - name: Pull LFS objects
+      shell: bash
+      run: git lfs pull

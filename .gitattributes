@@ -1,0 +1,6 @@
+# Binary model artifacts are stored with Git LFS (git-lfs.com).
+# After cloning, run `git lfs install && git lfs pull` if the files below are
+# small text pointers instead of real models.
+models/**/*.pkl filter=lfs diff=lfs merge=lfs -text
+models/**/*.joblib filter=lfs diff=lfs merge=lfs -text
+models/**/*.pt filter=lfs diff=lfs merge=lfs -text

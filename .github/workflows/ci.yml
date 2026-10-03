@@ -33,6 +33,7 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/lfs-pull
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -88,6 +89,7 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/lfs-pull
       - run: docker compose config --quiet
       - run: docker build -f api/Dockerfile -t lpr-api:test .
       - run: docker build -f docker/mlflow/Dockerfile -t lpr-mlflow:test .
