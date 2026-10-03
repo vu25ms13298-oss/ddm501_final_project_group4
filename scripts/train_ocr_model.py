@@ -373,6 +373,7 @@ def main():
         feature_method=args.feature,
         classifier_name=args.classifier,
         metrics=metrics,
+        feature_dim=x_train_f.shape[1],
     )
     print(f"Saved OCR model to: {args.output_dir}")
 
