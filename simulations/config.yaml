@@ -1,0 +1,88 @@
+# ============================================
+# LPR SIMULATION CONFIGURATION
+# ============================================
+
+api:
+  base_url: "http://localhost:8000"
+  predict_path: "/predict"
+  health_path: "/health"
+  timeout_s: 30
+
+prometheus:
+  url: "http://localhost:9090"
+
+images:
+  dataset_dirs:
+    - "../dataset/images/train"
+    - "../dataset/images/val"
+  synthetic_pool_size: 40
+  synthetic_seed: 42
+  scene_fraction: 0.3
+
+defaults:
+  # <= 0.8 req/s keeps within the API's default 60 req/min rate limit
+  rps: 0.8
+  concurrency: 2
+  source: "mixed" # dataset | synthetic | mixed
+  respect_rate_limit: true
+  show_progress: true
+
+scenarios:
+  normal:
+    description: "Standard daytime traffic with normal clarity"
+    transforms: []
+
+  dusk:
+    description: "Evening light transition (mild brightness decrease)"
+    transforms:
+      - name: brightness
+        factor: 0.6
+
+  night:
+    description: "Low-light / night conditions with camera sensor noise"
+    transforms:
+      - name: brightness
+        factor: 0.25
+      - name: noise
+        sigma: 12.0
+
+  overexposed:
+    description: "Harsh daylight glare / high brightness"
+    transforms:
+      - name: brightness
+        factor: 1.8
+
+  rain:
+    description: "Wet weather with motion blur and raindrops"
+    transforms:
+      - name: motion_blur
+        k: 9
+      - name: noise
+        sigma: 15.0
+      - name: brightness
+        factor: 0.75
+
+  low_res_camera:
+    description: "Low-resolution sensor / heavy compression"
+    transforms:
+      - name: downscale
+        factor: 0.25
+      - name: jpeg
+        quality: 25
+
+  tilted_camera:
+    description: "Camera misalignment or severe skew"
+    transforms:
+      - name: rotate
+        max_deg: 25.0
+
+  occluded:
+    description: "Physical dirt / partial bumper occlusion"
+    transforms:
+      - name: occlusion
+        frac: 0.35
+
+  non_plate:
+    description: "Random noise / scenery with no license plate (prediction drift)"
+    source: "noise_images"
+    transforms: []

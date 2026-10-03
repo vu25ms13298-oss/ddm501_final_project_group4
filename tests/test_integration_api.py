@@ -325,3 +325,31 @@ class TestModelSource:
         resp = client.get("/model/info")
         if resp.status_code == 200:
             assert resp.json()["model_source"] in ("local", "mlflow", "none")
+
+
+class TestRateLimiting:
+    def test_rate_limit_exceeded_returns_429_with_retry_after(self, client, monkeypatch):
+        from api import main as api_main
+        import time
+
+        # Simulate filling the window
+        client_ip = "testclient"
+        monkeypatch.setattr(api_main, "MAX_REQUESTS_PER_WINDOW", 2)
+        monkeypatch.setattr(api_main, "RATE_LIMIT_WINDOW", 60.0)
+
+        # Clear request times for test client
+        api_main._client_request_times.clear()
+
+        # Send 2 valid requests or mock them
+        api_main._client_request_times[client_ip] = [time.time(), time.time()]
+
+        # The 3rd request should hit 429
+        # TestClient uses 127.0.0.1 or testclient depending on setup
+        api_main._client_request_times["testclient"] = [time.time(), time.time()]
+        api_main._client_request_times["127.0.0.1"] = [time.time(), time.time()]
+
+        resp = client.post("/predict", files={"file": ("test.jpg", b"fake", "image/jpeg")})
+        assert resp.status_code == 429
+        assert "Rate limit exceeded" in resp.json()["detail"]
+        assert "Retry-After" in resp.headers
+        assert int(resp.headers["Retry-After"]) >= 1

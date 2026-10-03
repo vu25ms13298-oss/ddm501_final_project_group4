@@ -365,8 +365,116 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Live Simulation (fast windows)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Input Brightness (5m vs 1h)",
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 41 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "rate(input_image_brightness_sum[5m]) / rate(input_image_brightness_count[5m])",
+          "legendFormat": "mean 5m",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "rate(input_image_brightness_sum[1h]) / rate(input_image_brightness_count[1h])",
+          "legendFormat": "baseline 1h",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input Width (5m vs 1h)",
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 41 },
+      "fieldConfig": { "defaults": { "unit": "px" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "rate(input_image_width_pixels_sum[5m]) / rate(input_image_width_pixels_count[5m])",
+          "legendFormat": "mean 5m",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "rate(input_image_width_pixels_sum[1h]) / rate(input_image_width_pixels_count[1h])",
+          "legendFormat": "baseline 1h",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Recognition Success Rate (5m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 41 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "sum(rate(plate_recognition_result_total{result=\"success\"}[5m])) / sum(rate(plate_recognition_result_total[5m]))",
+          "legendFormat": "success rate 5m",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/predict HTTP Status Codes",
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 49 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "sum by (status) (rate(api_requests_total{endpoint=~\"/predict.*\"}[1m]))",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Rate-limited Requests (15m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 49 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-datasource" },
+          "expr": "sum(increase(model_prediction_errors_total{error_type=\"rate_limit_exceeded\"}[15m])) or vector(0)",
+          "legendFormat": "429s",
+          "refId": "A"
+        }
+      ]
     }
   ],
+  "refresh": "10s",
   "schemaVersion": 39,
   "tags": [
     "lpr",

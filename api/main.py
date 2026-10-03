@@ -21,7 +21,7 @@ from prometheus_client import (
 )
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.model_registry import DEFAULT_MODEL_URI, load_from_registry
@@ -213,10 +213,19 @@ async def track_requests(request, call_next):
         times[:] = [t for t in times if now - t < RATE_LIMIT_WINDOW]
         if len(times) >= MAX_REQUESTS_PER_WINDOW:
             PREDICTION_ERRORS.labels(error_type="rate_limit_exceeded").inc()
-            return Response(
-                content='{"detail":"Rate limit exceeded (max 60 requests per minute)"}',
+            REQUEST_COUNT.labels(
+                method=request.method, endpoint=endpoint, status=429
+            ).inc()
+            retry_after = max(1, int(RATE_LIMIT_WINDOW - (now - times[0])) + 1)
+            return JSONResponse(
+                content={
+                    "detail": (
+                        f"Rate limit exceeded (max {MAX_REQUESTS_PER_WINDOW} "
+                        f"requests per {int(RATE_LIMIT_WINDOW)} seconds)"
+                    )
+                },
                 status_code=429,
-                media_type="application/json",
+                headers={"Retry-After": str(retry_after)},
             )
         times.append(now)
 

@@ -108,6 +108,63 @@ groups:
           summary: "Input image resolution drifted from 7-day baseline"
           description: "Mean image width differs from the 7-day baseline by {{ $value | humanizePercentage }}."
 
+  # Short-window variants of the drift rules: react within a few minutes so a
+  # live simulation (simulations/scenarios.py) can fire them. The 1h-vs-7d
+  # rules above remain the production signal.
+  - name: drift_alerts_fast
+    rules:
+      - alert: InputBrightnessDriftFast
+        expr: |
+          abs(1 - (
+            (rate(input_image_brightness_sum[5m]) / rate(input_image_brightness_count[5m]))
+            / (rate(input_image_brightness_sum[1h]) / rate(input_image_brightness_count[1h]))
+          )) > 0.3
+        for: 2m
+        labels:
+          severity: warning
+          window: fast
+        annotations:
+          summary: "Input brightness (5m) drifted from the 1h baseline"
+          description: "Mean brightness differs from the 1h baseline by {{ $value | humanizePercentage }}."
+
+      - alert: InputResolutionDriftFast
+        expr: |
+          abs(1 - (
+            (rate(input_image_width_pixels_sum[5m]) / rate(input_image_width_pixels_count[5m]))
+            / (rate(input_image_width_pixels_sum[1h]) / rate(input_image_width_pixels_count[1h]))
+          )) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          window: fast
+        annotations:
+          summary: "Input resolution (5m) drifted from the 1h baseline"
+          description: "Mean image width differs from the 1h baseline by {{ $value | humanizePercentage }}."
+
+      - alert: LowRecognitionSuccessRateFast
+        expr: |
+          (
+            sum(rate(plate_recognition_result_total{result="success"}[5m]))
+              / sum(rate(plate_recognition_result_total[5m]))
+          ) < 0.5
+          and sum(rate(plate_recognition_result_total[5m])) > 0
+        for: 2m
+        labels:
+          severity: warning
+          window: fast
+        annotations:
+          summary: "Recognition success rate (5m) below 50%"
+          description: "Only {{ $value | humanizePercentage }} of predictions in the last 5 minutes produced a valid plate."
+
+      - alert: RateLimitBurst
+        expr: sum(increase(model_prediction_errors_total{error_type="rate_limit_exceeded"}[2m])) > 5
+        labels:
+          severity: warning
+          window: fast
+        annotations:
+          summary: "Clients are being rate limited"
+          description: "{{ $value | humanize }} requests were rejected with HTTP 429 in the last 2 minutes."
+
   - name: system_alerts
     rules:
       - alert: PrometheusTargetDown
