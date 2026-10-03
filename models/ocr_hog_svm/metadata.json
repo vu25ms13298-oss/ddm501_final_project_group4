@@ -32,26 +32,19 @@
     "Y",
     "Z"
   ],
+  "char_size": 32,
   "feature_method": "hog",
   "classifier": "svm",
+  "feature_dim": 1764,
+  "sklearn_version": "1.5.2",
   "metrics": {
-    "accuracy": 0.9272952853598014,
-    "macro_f1": 0.9311963798651146,
+    "accuracy": 0.9292803970223326,
+    "macro_f1": 0.933526730921465,
+    "macro_precision": 0.9436283905092143,
+    "macro_recall": 0.9292803970223323,
     "n_train": 16120,
     "n_test": 4030,
     "synthetic_per_class": 250,
-    "emnist_per_class": 0,
     "plate_style_synthetic_per_class": 400
-  },
-  "char_size": 32,
-  "hog_pixels_per_cell": [
-    4,
-    4
-  ],
-  "hog_cells_per_block": [
-    2,
-    2
-  ],
-  "hog_orientations": 9,
-  "feature_dim": 1764
+  }
 }
