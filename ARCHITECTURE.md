@@ -36,9 +36,16 @@
 ### 2.1. API Service (FastAPI)
 **Responsibility**: Serve the LPR model via REST endpoints.
 
-- Receives image uploads, decodes them, and passes to the LPR pipeline
-- Exposes Prometheus metrics for monitoring
-- Supports model hot-reloading without restart
+- Receives image uploads (max `MAX_UPLOAD_MB`, default 10 MB), decodes them, and
+  passes them to the LPR pipeline
+- CPU-bound inference runs in a worker thread (`run_in_threadpool`) so `/health`
+  and `/metrics` stay responsive during predictions
+- Model source (`MODEL_SOURCE`): `mlflow` loads `models:/lpr-ocr-classifier@production`
+  from the MLflow registry and falls back to the baked-in `models/ocr_hog_svm`;
+  `local` always uses the baked-in model
+- Hot reload via `POST /model/reload`, protected by the `X-Admin-Token` header
+  (`API_ADMIN_TOKEN`; disabled when unset). CORS origins come from `CORS_ALLOW_ORIGINS`
+- Exposes Prometheus metrics, including data/prediction drift signals
 - Health check endpoint for container orchestration
 
 ### 2.2. LPR Pipeline (Core ML)
@@ -55,7 +62,7 @@ Input Image (RGB)
 └────────┬───────────┘
          ▼
 ┌──────────────────┐
-│ Plate Detection   │  YOLOv8n (primary)
+│ Plate Detection   │  YOLOv8n (when weights are mounted, see README)
 │                    │  Contour-based fallback (AR 1.2-5.5)
 └────────┬───────────┘
          ▼
@@ -98,21 +105,34 @@ Input Image (RGB)
 
 - Backend store: PostgreSQL (parameters, metrics, run metadata)
 - Artifact store: local filesystem volume (model files, plots, reports)
-- Model registry for versioning and stage promotion
+- Model registry: `lpr-ocr-classifier` is registered as one sklearn
+  `Pipeline(scaler → SVM)` with metadata (feature method, feature dim, classes,
+  metrics). The alias **`@production`** marks the version the API serves
+  (`src/model_registry.py` is shared by training code and the API)
 
 ### 2.6. Apache Airflow (Pipeline Orchestration)
 **Responsibility**: Orchestrate and schedule ML training pipelines.
 
 - Standalone mode with SQLite backend (lightweight, no extra infra)
-- DAG: `lpr_training_pipeline` with 6 tasks in sequence:
-  1. `generate_data` — Synthetic character generation (250 + 400 samples/class)
+- DAG: `lpr_training_pipeline` with 7 tasks in sequence:
+  1. `generate_data` — Synthetic character generation (100 clean + 150 plate-style per class)
   2. `validate_data` — Data quality checks (NaN, value range, class count)
-  3. `extract_features` — HOG feature extraction from images
-  4. `train` — SVM training with 5-fold CV, logged to MLflow
+  3. `extract_features` — HOG feature extraction (1764-d)
+  4. `train` — SVM training with 3-fold CV, logged to MLflow
   5. `evaluate` — Accuracy/F1 metrics, classification report
-  6. `register_model` — Conditional model registration (accuracy > 85%)
+  6. `register_model` — Registers the Pipeline if accuracy ≥ 90%; promotes it to
+     `@production` only if it is at least as accurate as the current champion
+  7. `reload_api` — Calls `POST /model/reload` so the API serves the new champion
 - Scheduled `@weekly`, integrates with MLflow for experiment tracking
 - Web UI at port 8080 for pipeline monitoring and manual triggers
+- The image installs `fonts-dejavu-core`: the synthetic generator needs TrueType
+  fonts (it warns and degrades badly without them)
+
+### 2.7. Trainer (on-demand training environment)
+`trainer/Dockerfile` (compose profile `train`) runs `scripts/train_with_mlflow.py`
+with the same pinned library versions as the API and Airflow images, so a pickled
+model loads identically everywhere:
+`docker compose run --rm trainer python scripts/train_with_mlflow.py --tune`.
 
 ### 2.4. Monitoring Stack
 **Responsibility**: Real-time system and model performance monitoring.
@@ -120,13 +140,18 @@ Input Image (RGB)
 - **Prometheus**: Scrapes `/metrics` from API every 10s; evaluates alert rules
 - **Grafana**: Visualizes metrics via pre-provisioned dashboards; alert notifications
 - Metrics tracked: request rate, latency, errors, detection confidence, character count
+- Drift signals: recognition success rate (valid plate format), plate format score,
+  input brightness and input width. Alerts `LowRecognitionSuccessRate`,
+  `InputBrightnessDrift` and `InputResolutionDrift` compare the last hour against a
+  7-day baseline
 
 ### 2.5. CI/CD (GitHub Actions)
 **Responsibility**: Automated quality gates on every push/PR.
 
 ```
-Push/PR → Lint (ruff, black) → Unit Tests → Data Quality Tests
-  → Model Validation Tests → Integration Tests → Docker Build
+Push/PR → Lint (ruff, black) → Tests (unit, integration, data quality,
+  model validation, e2e; coverage ≥ 80%) → E2E synthetic-plate benchmark
+  (quality gate) → Docker build (api, mlflow, airflow, trainer)
 ```
 
 ## 3. Data Flow Diagram

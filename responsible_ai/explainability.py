@@ -12,7 +12,6 @@ import os
 import sys
 from pathlib import Path
 
-import joblib
 import matplotlib
 
 matplotlib.use("Agg")
@@ -25,28 +24,30 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.classifier import CHAR_CLASSES, generate_synthetic_chars
 from src.features import extract_hog_features
+from src.pipeline import FEATURE_EXTRACTORS, LPRPipeline
 
 
 def load_model(models_dir: str):
-    clf_path = os.path.join(models_dir, "classifier.joblib")
-    scaler_path = os.path.join(models_dir, "scaler.joblib")
-    if not os.path.exists(clf_path):
-        clf_path = os.path.join(models_dir, "svm_classifier.pkl")
-    if not os.path.exists(scaler_path):
-        scaler_path = os.path.join(models_dir, "feature_scaler.pkl")
-    clf = joblib.load(clf_path)
-    scaler = joblib.load(scaler_path)
-    return clf, scaler
+    """Returns ``(clf, scaler, extract_fn)`` matching the model's feature method.
+
+    Loading through LPRPipeline reuses its metadata handling, so the feature
+    extractor always matches what the scaler was fitted on (e.g. 324-d legacy
+    HOG vs 1764-d HOG).
+    """
+    p = LPRPipeline(models_dir=models_dir)
+    if p.svm_model is None:
+        raise FileNotFoundError(f"No OCR model found in {models_dir}")
+    return p.svm_model, p.scaler, FEATURE_EXTRACTORS[p.feature_method]
 
 
-def generate_background_data(n_per_class: int = 10):
+def generate_background_data(n_per_class: int = 10, extract_fn=extract_hog_features):
     """Generate a small background dataset for SHAP."""
     x_imgs, y_labels = generate_synthetic_chars(
         char_classes=CHAR_CLASSES,
         samples_per_class=n_per_class,
         img_size=64,
     )
-    features = extract_hog_features(x_imgs)
+    features = extract_fn(x_imgs)
     return features, y_labels, x_imgs
 
 
@@ -56,16 +57,21 @@ def run_shap_analysis(
     output_dir: str,
     n_background: int = 10,
     n_explain: int = 50,
+    extract_fn=extract_hog_features,
 ):
     """Run SHAP analysis on the OCR classifier."""
     import shap
 
     print("Generating background data for SHAP...")
-    bg_features, bg_labels, _ = generate_background_data(n_per_class=n_background)
+    bg_features, bg_labels, _ = generate_background_data(
+        n_per_class=n_background, extract_fn=extract_fn
+    )
     bg_scaled = scaler.transform(bg_features)
 
     print("Generating explanation samples...")
-    exp_features, exp_labels, exp_imgs = generate_background_data(n_per_class=2)
+    exp_features, exp_labels, exp_imgs = generate_background_data(
+        n_per_class=2, extract_fn=extract_fn
+    )
     exp_scaled = scaler.transform(exp_features)
 
     sample_idx = np.random.choice(
@@ -149,15 +155,20 @@ def run_lime_analysis(
     scaler,
     output_dir: str,
     n_explain: int = 10,
+    extract_fn=extract_hog_features,
 ):
     """Run LIME analysis on individual predictions."""
     from lime.lime_tabular import LimeTabularExplainer
 
     print("Generating data for LIME...")
-    bg_features, bg_labels, _ = generate_background_data(n_per_class=15)
+    bg_features, bg_labels, _ = generate_background_data(
+        n_per_class=15, extract_fn=extract_fn
+    )
     bg_scaled = scaler.transform(bg_features)
 
-    exp_features, exp_labels, exp_imgs = generate_background_data(n_per_class=2)
+    exp_features, exp_labels, exp_imgs = generate_background_data(
+        n_per_class=2, extract_fn=extract_fn
+    )
     exp_scaled = scaler.transform(exp_features)
 
     feature_names = [f"HOG_{i}" for i in range(bg_scaled.shape[1])]
@@ -243,14 +254,18 @@ def main():
     parser.add_argument("--method", choices=["shap", "lime", "both"], default="both")
     args = parser.parse_args()
 
-    clf, scaler = load_model(args.models_dir)
+    clf, scaler, extract_fn = load_model(args.models_dir)
     np.random.seed(42)
 
     if args.method in ("shap", "both"):
-        run_shap_analysis(clf, scaler, os.path.join(args.output_dir, "shap"))
+        run_shap_analysis(
+            clf, scaler, os.path.join(args.output_dir, "shap"), extract_fn=extract_fn
+        )
 
     if args.method in ("lime", "both"):
-        run_lime_analysis(clf, scaler, os.path.join(args.output_dir, "lime"))
+        run_lime_analysis(
+            clf, scaler, os.path.join(args.output_dir, "lime"), extract_fn=extract_fn
+        )
 
 
 if __name__ == "__main__":

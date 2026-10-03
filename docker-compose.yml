@@ -51,9 +51,21 @@ services:
       mlflow:
         condition: service_healthy
     environment:
+      # "mlflow": load models:/lpr-ocr-classifier@production, falling back to
+      # the baked-in MODELS_DIR when the registry has no production version.
+      MODEL_SOURCE: ${MODEL_SOURCE:-mlflow}
+      MODEL_URI: ${MODEL_URI:-models:/lpr-ocr-classifier@production}
       MODELS_DIR: /app/models/ocr_hog_svm
       YOLO_MODEL_PATH: /app/models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      # Required for POST /model/reload (header X-Admin-Token). Empty = disabled.
+      API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://localhost:8000}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+    volumes:
+      # YOLO weights are not committed (see README). Drop best.pt here and
+      # restart the API to enable YOLO detection without rebuilding the image.
+      - ./models/yolo_runs:/app/models/yolo_runs:ro
     ports:
       - "8000:8000"
     healthcheck:
@@ -61,6 +73,26 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+    networks:
+      - lpr_network
+
+  # ---- OCR trainer (on demand: docker compose run --rm trainer) ----
+  trainer:
+    build:
+      context: .
+      dockerfile: trainer/Dockerfile
+    container_name: lpr_trainer
+    profiles: ["train"]
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./models:/app/models
+      - ./data:/app/data
     networks:
       - lpr_network
 
@@ -131,6 +163,8 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      LPR_API_URL: http://api:8000
+      API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
@@ -139,7 +173,9 @@ services:
       - airflow_data:/opt/airflow
     ports:
       - "8080:8080"
-    command: airflow standalone
+    # /opt/airflow is a named volume, so a webserver PID file left by a previous
+    # container survives restarts and blocks the webserver ("Already running").
+    command: bash -c "rm -f /opt/airflow/airflow-webserver*.pid && exec airflow standalone"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

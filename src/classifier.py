@@ -4,9 +4,11 @@
 # This module implements dataset generation for synthetic characters,
 # training of the SVM classifier on ResNet18 features, and saving of models.
 
+import functools
 import os
 import random
 import json
+import warnings
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
@@ -18,6 +20,10 @@ from .segmentation import resize_pad_char
 
 # Bảng ký tự cần nhận dạng (Loại bỏ I, O, Q theo quy định biển Việt Nam)
 CHAR_CLASSES = "0123456789ABCDEFGHKLMNPRSTUVXYZ"
+
+# joblib compression for saved models: zlib level 3 shrinks the HOG-1764 SVM
+# from ~104 MB to ~37 MB while adding <1 s to load time.
+MODEL_COMPRESSION = ("zlib", 3)
 
 
 def _available_fonts():
@@ -42,6 +48,15 @@ def _available_fonts():
                 except Exception:
                     pass
     if not fonts:
+        # The PIL default bitmap font is ~11px, so synthetic characters generated
+        # with it look nothing like real plates and models trained on them are
+        # unreliable. Install fonts-dejavu-core (Debian/Ubuntu) to avoid this.
+        warnings.warn(
+            "No TrueType fonts found; falling back to PIL's tiny default font. "
+            "Install 'fonts-dejavu-core' for usable synthetic training data.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         fonts = [ImageFont.load_default()]
     return fonts
 
@@ -243,6 +258,7 @@ def save_models(
     feature_method="resnet",
     classifier_name="svm",
     metrics=None,
+    feature_dim=None,
 ):
     """
     Lưu models để Member 4 sử dụng tích hợp.
@@ -254,21 +270,29 @@ def save_models(
         feature_method: feature extractor used before the classifier
         classifier_name: classifier family/name
         metrics: optional evaluation metrics to persist
+        feature_dim: dimensionality of the feature vector the model expects
     """
+    import sklearn
+
     os.makedirs(save_dir, exist_ok=True)
 
-    joblib.dump(svm_model, os.path.join(save_dir, "classifier.joblib"))
-    joblib.dump(scaler, os.path.join(save_dir, "scaler.joblib"))
+    # Compressed: an RBF SVM stores all support vectors (float64), which can
+    # exceed GitHub's 100 MB file limit uncompressed. joblib.load is unchanged.
+    dump = functools.partial(joblib.dump, compress=MODEL_COMPRESSION)
+    dump(svm_model, os.path.join(save_dir, "classifier.joblib"))
+    dump(scaler, os.path.join(save_dir, "scaler.joblib"))
 
     # Backward-compatible filenames used by the original notebook/pipeline.
-    joblib.dump(svm_model, os.path.join(save_dir, "svm_classifier.pkl"))
-    joblib.dump(scaler, os.path.join(save_dir, "feature_scaler.pkl"))
+    dump(svm_model, os.path.join(save_dir, "svm_classifier.pkl"))
+    dump(scaler, os.path.join(save_dir, "feature_scaler.pkl"))
 
     metadata = {
         "char_classes": list(CHAR_CLASSES),
         "char_size": 32,
         "feature_method": feature_method,
         "classifier": classifier_name,
+        "feature_dim": int(feature_dim or getattr(scaler, "n_features_in_", 0)),
+        "sklearn_version": sklearn.__version__,
         "metrics": metrics or {},
     }
 

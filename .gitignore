@@ -20,7 +20,8 @@ models/**/*.pt
 models/**/*.joblib
 models/ocr_eval*/
 models/ocr_hog_svm_improved/
-models/yolo_runs/
+models/yolo_runs/*
+!models/yolo_runs/.gitkeep
 *.pt
 !models/ocr_hog_svm/metadata.json
 !models/ocr_hog_svm/char_classes.json

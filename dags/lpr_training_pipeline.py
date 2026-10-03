@@ -1,8 +1,13 @@
 """
 LPR OCR Training Pipeline — Airflow DAG
 
-Six tasks: generate_data -> validate_data -> extract_features -> train -> evaluate -> register
-Trains the HOG+SVM OCR classifier and logs everything to MLflow.
+generate_data -> validate_data -> extract_features -> train -> evaluate
+  -> register_model -> reload_api
+
+Trains the HOG+SVM OCR classifier, logs everything to MLflow, registers the
+model as a Pipeline(scaler -> SVM) and promotes it to @production only when it
+beats both MIN_ACCURACY and the current production model (champion/challenger).
+The API (MODEL_SOURCE=mlflow) is then asked to reload the production model.
 """
 
 from __future__ import annotations
@@ -29,12 +34,13 @@ if str(PROJECT) not in sys.path:
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 MLFLOW_EXPERIMENT = "lpr-ocr-training"
-MLFLOW_MODEL_NAME = "lpr-ocr-classifier"
+API_URL = os.getenv("LPR_API_URL", "http://api:8000")
+API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN", "")
 
 CHAR_CLASSES_STR = "0123456789ABCDEFGHKLMNPRSTUVXYZ"
-MIN_ACCURACY = 0.70
-SAMPLES_PER_CLASS = 30
-PLATE_STYLE_SAMPLES = 20
+MIN_ACCURACY = 0.90
+SAMPLES_PER_CLASS = 100
+PLATE_STYLE_SAMPLES = 150
 TEST_SIZE = 0.2
 SEED = 42
 
@@ -169,7 +175,6 @@ def lpr_training_pipeline():
     def train(feature_meta: dict, ds: str = None) -> dict:
         """Train SVM classifier and log to MLflow."""
         import mlflow
-        import mlflow.sklearn
         from sklearn.model_selection import cross_val_score, train_test_split
         from sklearn.preprocessing import StandardScaler
         from sklearn.svm import SVC
@@ -257,61 +262,112 @@ def lpr_training_pipeline():
         }
 
     @task
-    def register_model(eval_meta: dict, ds: str = None) -> str:
-        """Register model in MLflow if accuracy meets threshold."""
-        import mlflow
-        import mlflow.sklearn
+    def register_model(eval_meta: dict, feature_meta: dict, ds: str = None) -> dict:
+        """Register the model; promote to @production if it beats the champion."""
         import joblib
+        import mlflow
+
+        from src.classifier import CHAR_CLASSES
+        from src.model_registry import (
+            PRODUCTION_ALIAS,
+            REGISTERED_MODEL_NAME,
+            log_and_register,
+        )
 
         accuracy = eval_meta["accuracy"]
         run_id = eval_meta["mlflow_run_id"]
         out = run_dir(ds)
 
         if accuracy < MIN_ACCURACY:
-            msg = (
-                f"Accuracy {accuracy:.4f} below threshold "
-                f"{MIN_ACCURACY}. Model NOT registered."
+            log.warning(
+                "Accuracy %.4f below threshold %.2f. Model NOT registered.",
+                accuracy,
+                MIN_ACCURACY,
             )
-            log.warning(msg)
-            return msg
+            return {"registered": False, "promoted": False}
 
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-
-        clf = joblib.load(str(out / "svm_classifier.pkl"))
-        with mlflow.start_run(run_id=run_id):
-            mv = mlflow.sklearn.log_model(
-                clf,
-                artifact_path="ocr_model",
-                registered_model_name=MLFLOW_MODEL_NAME,
-            )
-            mlflow.set_tag("registered", "true")
-
         client = mlflow.MlflowClient()
-        versions = client.get_registered_model(MLFLOW_MODEL_NAME).latest_versions
-        version = max(int(v.version) for v in versions)
+        champion_acc = None
+        try:
+            champion = client.get_model_version_by_alias(
+                REGISTERED_MODEL_NAME, PRODUCTION_ALIAS
+            )
+            champion_acc = client.get_run(champion.run_id).data.metrics.get("accuracy")
+        except Exception:
+            log.info(
+                "No current @%s model; this run becomes champion", PRODUCTION_ALIAS
+            )
+        promote = champion_acc is None or accuracy >= champion_acc
 
-        msg = f"Registered {MLFLOW_MODEL_NAME} v{version} " f"(accuracy={accuracy:.4f})"
-        log.info(msg)
+        metadata = {
+            "char_classes": list(CHAR_CLASSES),
+            "char_size": 32,
+            "feature_method": "hog",
+            "classifier": "svm",
+            "feature_dim": feature_meta["feature_dim"],
+            "metrics": {
+                "accuracy": accuracy,
+                "macro_f1": eval_meta["macro_f1"],
+            },
+        }
+        clf = joblib.load(str(out / "svm_classifier.pkl"))
+        scaler = joblib.load(str(out / "feature_scaler.pkl"))
+        with mlflow.start_run(run_id=run_id):
+            registered = log_and_register(clf, scaler, metadata, promote=promote)
 
+        log.info(
+            "Registered %s v%s (accuracy=%.4f, champion=%s, promoted=%s)",
+            registered["model_name"],
+            registered["model_version"],
+            accuracy,
+            champion_acc,
+            promote,
+        )
         summary = {
             "ds": ds,
             "accuracy": accuracy,
             "macro_f1": eval_meta["macro_f1"],
+            "champion_accuracy": champion_acc,
             "mlflow_run_id": run_id,
-            "model_version": version,
-            "model_uri": mv.model_uri,
             "registered": True,
+            **registered,
         }
         (out / "summary.json").write_text(json.dumps(summary, indent=2))
+        return summary
 
-        return msg
+    @task
+    def reload_api(summary: dict) -> str:
+        """Ask the serving API to pick up a newly promoted production model."""
+        import urllib.request
+
+        if not summary.get("promoted"):
+            return "Nothing promoted; API reload skipped"
+        if not API_ADMIN_TOKEN:
+            return "API_ADMIN_TOKEN not set; reload the API manually"
+
+        req = urllib.request.Request(
+            f"{API_URL}/model/reload",
+            method="POST",
+            headers={"X-Admin-Token": API_ADMIN_TOKEN},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                body = resp.read().decode()
+        except Exception as exc:
+            # The model is already promoted; a failed reload must not fail the run.
+            log.warning("API reload failed: %s", exc)
+            return f"API reload failed: {exc}"
+        log.info("API reloaded: %s", body)
+        return body
 
     data = generate_data()
     validated = validate_data(data)
     features = extract_features(validated)
     trained = train(features)
     evaluated = evaluate(trained)
-    register_model(evaluated)
+    summary = register_model(evaluated, features)
+    reload_api(summary)
 
 
 lpr_training_pipeline()

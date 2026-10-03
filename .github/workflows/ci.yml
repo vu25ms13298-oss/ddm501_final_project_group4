@@ -47,6 +47,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # TrueType fonts for the synthetic character/plate generators.
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
           pip install --upgrade pip
           pip install -r requirements-ci.txt
 
@@ -56,7 +58,22 @@ jobs:
             --cov=src --cov=api \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=55
+            --cov-fail-under=80
+
+      - name: End-to-end benchmark (synthetic plates, quality gate)
+        run: |
+          python scripts/generate_synthetic_plates.py --out-dir data/benchmarks/synthetic_plates --n 60
+          python scripts/evaluate_lpr_end_to_end.py \
+            --manifest data/benchmarks/synthetic_plates/manifest.csv \
+            --output results/e2e_synthetic_plates.csv \
+            --min-char-accuracy 0.85 --min-exact-accuracy 0.50
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-benchmark
+          path: results/e2e_synthetic_plates.csv
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -75,3 +92,4 @@ jobs:
       - run: docker build -f api/Dockerfile -t lpr-api:test .
       - run: docker build -f mlflow/Dockerfile -t lpr-mlflow:test .
       - run: docker build -f airflow/Dockerfile -t lpr-airflow:test .
+      - run: docker build -f trainer/Dockerfile -t lpr-trainer:test .

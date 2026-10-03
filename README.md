@@ -114,7 +114,8 @@ The system is deployed as a REST API with full MLOps infrastructure: experiment 
 
 ```bash
 git clone https://github.com/vu25ms13298-oss/ddm501_final_project_group4.git
-cd license-plate-recognition
+cd ddm501_final_project_group4
+cp .env.example .env   # optional: set API_ADMIN_TOKEN to enable /model/reload
 docker compose up -d --build
 ```
 
@@ -153,8 +154,16 @@ curl http://localhost:8000/model/info
 | GET    | `/model/info`     | Loaded model details                 |
 | POST   | `/predict`        | Recognize plate from uploaded image  |
 | POST   | `/predict/base64` | Recognize plate from base64 image    |
-| POST   | `/model/reload`   | Reload model from disk               |
+| POST   | `/model/reload`   | Reload model (registry or disk); requires `X-Admin-Token` |
 | GET    | `/metrics`        | Prometheus metrics                   |
+
+`/predict` accepts `assume_plate_crop` as a form field (`true` when the image is
+already a tight plate crop). Uploads larger than `MAX_UPLOAD_MB` (default 10) get
+HTTP 413. `/model/reload` is disabled unless `API_ADMIN_TOKEN` is set:
+
+```bash
+curl -X POST http://localhost:8000/model/reload -H "X-Admin-Token: $API_ADMIN_TOKEN"
+```
 
 ### Prediction Response
 
@@ -239,11 +248,22 @@ Scene Image → Preprocessing (CLAHE, bilateral filter)
 ```
 
 ### Model Details
-- **Feature extractor**: HOG (pixels_per_cell=4x4, orientations=9) → 1764-d
-- **Classifier**: SVM (RBF kernel, C=10)
+- **Feature extractor**: HOG (pixels_per_cell=4x4, cells_per_block=2x2, orientations=9) → 1764-d
+- **Classifier**: SVM (RBF kernel, C=5, gamma=auto — selected by 3-fold GridSearchCV)
 - **Character set**: 31 classes — `0-9, A-H, K-N, P, R-V, X-Z` (excluding I, J, O, Q, W per Vietnamese plate rules)
-- **Training data**: Synthetic characters (250/class) + plate-style synthetic (400/class)
-- **Reported accuracy**: 92.73% (character-level), 72.73% (full plate)
+- **Training data**: Synthetic characters (250/class) + plate-style synthetic (400/class), 16,120 train / 4,030 test
+- **Environment**: scikit-learn 1.5.2 (pinned identically in API, Airflow, trainer and CI)
+- Metrics below are reproducible with the commands in this README; all are on
+  **synthetic** data and therefore an upper bound for real camera images:
+
+| Model | Char accuracy | Char macro F1 | E2E exact plate (60 synthetic plates) | E2E char accuracy |
+|---|---|---|---|---|
+| **HOG-1764 + SVM (deployed, `@production` v2)** | 92.93% | 93.35% | **85.00%** | **96.41%** |
+| HOG-324 (8x8 cells) + SVM | 96.90% | 96.90% | 81.67% | 93.61% |
+
+HOG-324 scores higher on isolated characters, but HOG-1764 is better on the
+end-to-end plate metric that matters for the business goal, so HOG-1764 is
+deployed. Both runs are in the MLflow experiment `lpr-ocr-training`.
 
 ## Monitoring
 
@@ -255,6 +275,9 @@ Scene Image → Preprocessing (CLAHE, bilateral filter)
 - `model_prediction_errors_total` — Error count by type
 - `plate_char_count` — Characters detected per plate
 - `detection_confidence` — YOLO detection confidence
+- `model_info` — Loaded model (feature method, classifier, source, registry version)
+- Drift signals: `plate_recognition_result_total{result}` (valid-format rate),
+  `plate_format_score`, `input_image_brightness`, `input_image_width_pixels`
 
 ### Grafana Dashboard
 Pre-configured dashboard at http://localhost:3000 includes:
@@ -262,6 +285,8 @@ Pre-configured dashboard at http://localhost:3000 includes:
 - Predictions by plate type, error rates
 - Detection confidence distribution
 - API uptime status
+- Data & prediction drift: recognition success rate, input brightness and width
+  (last hour vs 7-day baseline)
 
 ### Alert Rules
 - `APIDown` — API unreachable for >1 minute
@@ -269,40 +294,82 @@ Pre-configured dashboard at http://localhost:3000 includes:
 - `APIHighErrorRate` — Error rate >0.1/sec
 - `HighPredictionLatency` — Model inference >3 seconds
 - `LowCharacterDetection` — Median chars <5
+- `LowRecognitionSuccessRate` — <50% of predictions have a valid plate format (30 min)
+- `InputBrightnessDrift` / `InputResolutionDrift` — 1h mean deviates from the 7-day
+  baseline by >30% / >50%
 
-## Experiment Tracking (MLflow)
+## Experiment Tracking & Model Registry (MLflow)
+
+Training runs in the `trainer` container, which pins the same library versions as
+the API and Airflow images (a model pickled with one scikit-learn version may not
+load correctly with another):
 
 ```bash
-# Train with MLflow tracking
-python scripts/train_with_mlflow.py \
-  --feature hog \
-  --classifier svm \
-  --experiment-name lpr-ocr-training
+# Train, log to MLflow, register, and promote to @production if accuracy >= 0.90
+docker compose run --rm trainer python scripts/train_with_mlflow.py \
+  --feature hog --classifier svm --tune --cv-folds 3
+
+# Make the running API pick up the new @production version
+curl -X POST http://localhost:8000/model/reload -H "X-Admin-Token: $API_ADMIN_TOKEN"
 ```
 
 MLflow UI at http://localhost:5000 tracks:
 - Parameters: feature method, classifier type, hyperparameters
 - Metrics: accuracy, F1, precision, recall, training time
-- Artifacts: model files, classification report, confusion matrix
+- Artifacts: classification report, confusion matrix, metadata
+- Registry: `lpr-ocr-classifier` (sklearn `Pipeline(scaler → SVM)` + metadata).
+  The alias `@production` is what the API serves when `MODEL_SOURCE=mlflow`
+  (default in docker-compose). Without a promoted version the API falls back to the
+  baked-in `models/ocr_hog_svm`; `/model/info` reports `model_source` and
+  `model_version`.
+
+The Airflow DAG `lpr_training_pipeline` automates the same loop weekly:
+train → evaluate → register → promote only if it beats the current champion →
+`/model/reload`.
+
+## End-to-End Benchmark
+
+Real labelled plate images are not committed (the Roboflow detection dataset is
+referenced in `dataset/data.yaml`). For a reproducible end-to-end regression check,
+the repo generates labelled synthetic plates (1-line and 2-line, crops and scenes):
+
+```bash
+python scripts/generate_synthetic_plates.py --out-dir data/benchmarks/synthetic_plates --n 60
+python scripts/evaluate_lpr_end_to_end.py \
+  --manifest data/benchmarks/synthetic_plates/manifest.csv \
+  --min-char-accuracy 0.85 --min-exact-accuracy 0.50
+```
+
+CI runs this as a quality gate. Synthetic plates are cleaner than camera images, so
+these scores are an **upper bound**; to evaluate on real data, pass a CSV manifest
+with `image,label[,plate_crop]` columns to the same script.
 
 ## Testing
 
 ```bash
-# Install test dependencies
-pip install pytest pytest-cov httpx
+# Install test dependencies (Python 3.10+; Debian/Ubuntu also need fonts-dejavu-core)
+pip install -r requirements-ci.txt
 
 # Run all tests
 pytest tests/ -v
 
 # Run specific test types
 pytest tests/test_unit_*.py         # Unit tests
-pytest tests/test_integration_*.py  # Integration tests
+pytest tests/test_integration_*.py  # Integration tests (API)
+pytest tests/test_e2e_*.py          # End-to-end on synthetic plates
 pytest tests/test_data_quality.py   # Data quality tests
 pytest tests/test_model_validation.py  # Model validation
 
-# With coverage
+# With coverage (CI requires >= 80%)
 pytest tests/ --cov=src --cov=api --cov-report=term-missing
+
+# Or, without a local Python setup, inside the trainer image:
+docker compose run --rm -v "$PWD:/app" trainer pytest tests/ --cov=src --cov=api
 ```
+
+Current result: 102 tests, 80.8% line coverage (`src/` + `api/`). Uncovered code is
+mostly the optional ResNet18/YOLO-training paths that need torch, which CI does
+not install.
 
 ## Responsible AI
 
@@ -345,7 +412,11 @@ pytest tests/ -v
 
 **Docker build fails with memory error**: Increase Docker memory to 8GB+ (Settings → Resources).
 
-**API returns 503**: The model files are not found. Ensure `models/ocr_hog_svm/` contains `classifier.joblib` and `scaler.joblib`.
+**API returns 503**: The model files are not found. Ensure `models/ocr_hog_svm/` contains `svm_classifier.pkl`, `feature_scaler.pkl` and `metadata.json` (or promote a model to `@production` in MLflow).
+
+**`yolo_loaded: false`**: YOLO weights are not committed to the repo. Put `best.pt` at `models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt` (mounted read-only into the API container) and run `docker compose restart api`. Without weights the API uses the contour-based fallback detector.
+
+**Synthetic data looks wrong / RuntimeWarning about fonts**: the character generator needs TrueType fonts. Install `fonts-dejavu-core` (already included in the trainer and Airflow images).
 
 **MLflow connection refused**: Wait for PostgreSQL to be healthy before MLflow starts. Run `docker compose logs mlflow` to check.
 
