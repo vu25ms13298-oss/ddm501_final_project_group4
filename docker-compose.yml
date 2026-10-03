@@ -98,7 +98,7 @@ services:
 
   # ---- Prometheus ----
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.45.0
     container_name: lpr_prometheus
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml

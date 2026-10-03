@@ -477,7 +477,10 @@ class LPRPipeline:
             # Early exit: if candidate_0 already has high format score and valid format,
             # skip the expensive 180-degree flipped crop evaluation to save latency.
             text_0 = candidate_0.get("plate_string") or ""
-            if (PREFERRED_PLATE_RE.match(text_0) or VALID_PLATE_RE.match(text_0)) and candidate_0.get("format_score", 0.0) >= 12.0:
+            is_valid_format = bool(
+                PREFERRED_PLATE_RE.match(text_0) or VALID_PLATE_RE.match(text_0)
+            )
+            if is_valid_format and candidate_0.get("format_score", 0.0) >= 12.0:
                 continue
 
             candidate_180 = self._recognize_plate_crop_candidate(
