@@ -125,6 +125,7 @@ services:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW__WEBSERVER__SECRET_KEY: lpr-airflow-secret-key
+      AIRFLOW__WEBSERVER__WORKERS: "2"
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: admin
@@ -144,7 +145,7 @@ services:
       interval: 30s
       timeout: 15s
       retries: 5
-      start_period: 60s
+      start_period: 120s
     networks:
       - lpr_network
 
