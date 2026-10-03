@@ -23,7 +23,7 @@ services:
   mlflow:
     build:
       context: .
-      dockerfile: mlflow/Dockerfile
+      dockerfile: docker/mlflow/Dockerfile
     container_name: lpr_mlflow
     depends_on:
       postgres:
@@ -146,7 +146,7 @@ services:
   airflow:
     build:
       context: .
-      dockerfile: airflow/Dockerfile
+      dockerfile: docker/airflow/Dockerfile
     container_name: lpr_airflow
     depends_on:
       mlflow:

@@ -197,12 +197,31 @@ app.add_middleware(
 )
 
 
+_client_request_times: dict[str, list[float]] = {}
+RATE_LIMIT_WINDOW = 60.0
+MAX_REQUESTS_PER_WINDOW = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60"))
+
+
 @app.middleware("http")
 async def track_requests(request, call_next):
-    """Single place where every HTTP request is counted and timed."""
+    """Single place where every HTTP request is counted, timed, and rate-limited."""
+    endpoint = request.url.path
+    if endpoint.startswith("/predict"):
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        now = time.time()
+        times = _client_request_times.setdefault(client_ip, [])
+        times[:] = [t for t in times if now - t < RATE_LIMIT_WINDOW]
+        if len(times) >= MAX_REQUESTS_PER_WINDOW:
+            PREDICTION_ERRORS.labels(error_type="rate_limit_exceeded").inc()
+            return Response(
+                content='{"detail":"Rate limit exceeded (max 60 requests per minute)"}',
+                status_code=429,
+                media_type="application/json",
+            )
+        times.append(now)
+
     t0 = time.time()
     response = await call_next(request)
-    endpoint = request.url.path
     if endpoint != "/metrics":
         REQUEST_COUNT.labels(
             method=request.method,

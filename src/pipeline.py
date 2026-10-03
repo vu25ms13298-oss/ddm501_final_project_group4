@@ -9,7 +9,9 @@ import cv2
 import json
 import os
 import re
+import threading
 import joblib
+import numpy as np
 
 try:
     from ultralytics import YOLO
@@ -159,6 +161,7 @@ class LPRPipeline:
         self.feature_method = "resnet"
         self.classifier_name = "svm"
         self.char_classes = list(CHAR_CLASSES)
+        self._lock = threading.Lock()
 
         if models_dir and os.path.exists(models_dir):
             self.load_svm_models(models_dir)
@@ -306,10 +309,11 @@ class LPRPipeline:
                 elif pos == 2:
                     allowed_by_pos.append(letter_indices)
                 elif pos == 3 and n_top >= 4:
-                    # Two-line Vietnamese plates may use a two-letter series
-                    # on the top row, e.g. 92CA / 034.84. Do not force the
-                    # fourth top-row character into a digit.
-                    allowed_by_pos.append(letter_indices)
+                    # Two-line Vietnamese plates can be:
+                    # 1) Standard motorbikes: 2 digits + 1 letter + 1 digit (e.g. 59-S2, 29-H1)
+                    # 2) Special/Commercial: 2 digits + 2 letters (e.g. 92CA, 51LD)
+                    # Therefore, allow BOTH digits and letters at position 3.
+                    allowed_by_pos.append(digit_indices + letter_indices)
                 else:
                     allowed_by_pos.append(digit_indices)
         else:
@@ -358,6 +362,18 @@ class LPRPipeline:
             features_scaled, raw_preds, plate_type, line_counts
         )
         pred_chars = [self.char_classes[p] for p in preds]
+        # Topological disambiguation for '1' vs '7':
+        # Numeral '1' is a narrow vertical stroke (w/h <= 0.48 in 32x32 canvas),
+        # whereas '7' possesses a wide horizontal top bar (w/h >= 0.55).
+        for i, ch in enumerate(pred_chars):
+            if ch == "7" and i < len(char_imgs):
+                c_img = char_imgs[i]
+                ys, xs = np.where(c_img > 50)
+                if len(xs) > 0 and len(ys) > 0:
+                    w = xs.max() - xs.min() + 1
+                    h = ys.max() - ys.min() + 1
+                    if w / float(h) <= 0.48:
+                        pred_chars[i] = "1"
         raw_text = "".join(pred_chars)
         corrected_text = correct_plate_format(raw_text)
         candidate.update(
@@ -443,8 +459,8 @@ class LPRPipeline:
             self._add_crop_variant(variants, seen, opposite, -deskew_angle)
 
         # Small crops from traffic photos often get an imperfect skew estimate.
-        # Try a few residual rotations and let OCR/format scoring pick the best.
-        for residual in (-20, -12, -6, 6, 12, 20):
+        # Try moderate residual rotations to avoid combinatorial explosion and excessive latency.
+        for residual in (-10, -5, 5, 10):
             rotated = crop_plate_body_after_deskew(
                 rotate_bound(deskewed_crop, residual)
             )
@@ -457,6 +473,12 @@ class LPRPipeline:
             candidate_0 = self._recognize_plate_crop_candidate(crop_variant)
             candidate_0["deskew_angle"] = angle
             candidates.append((False, candidate_0))
+
+            # Early exit: if candidate_0 already has high format score and valid format,
+            # skip the expensive 180-degree flipped crop evaluation to save latency.
+            text_0 = candidate_0.get("plate_string") or ""
+            if (PREFERRED_PLATE_RE.match(text_0) or VALID_PLATE_RE.match(text_0)) and candidate_0.get("format_score", 0.0) >= 12.0:
+                continue
 
             candidate_180 = self._recognize_plate_crop_candidate(
                 cv2.rotate(crop_variant, cv2.ROTATE_180)
@@ -505,8 +527,9 @@ class LPRPipeline:
             result["detection_confidence"] = 1.0
         else:
             if yolo_model_path is not None:
-                if self.yolo_model is None or self.yolo_model_path != yolo_model_path:
-                    self.load_yolo_model(yolo_model_path)
+                with self._lock:
+                    if self.yolo_model is None or self.yolo_model_path != yolo_model_path:
+                        self.load_yolo_model(yolo_model_path)
 
             if self.yolo_model is not None:
                 boxes = detect_plate_yolo(processed_img, self.yolo_model)

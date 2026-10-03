@@ -24,6 +24,10 @@ class TestCorrectPlateFormat:
         result = correct_plate_format("AB")
         assert isinstance(result, str)
 
+    def test_two_line_motorbike_plate(self):
+        # Vietnamese 2-line motorbike plates: 59-S2 123.45
+        assert correct_plate_format("59S212345") == "59S212345"
+
 
 class TestLPRPipelineInit:
     def test_init_without_models(self):
