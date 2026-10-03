@@ -531,7 +531,10 @@ class LPRPipeline:
         else:
             if yolo_model_path is not None:
                 with self._lock:
-                    if self.yolo_model is None or self.yolo_model_path != yolo_model_path:
+                    if (
+                        self.yolo_model is None
+                        or self.yolo_model_path != yolo_model_path
+                    ):
                         self.load_yolo_model(yolo_model_path)
 
             if self.yolo_model is not None:
