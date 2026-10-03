@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 import mlflow
-import mlflow.sklearn
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
@@ -40,6 +39,7 @@ from src.classifier import (
     save_models,
 )
 
+from src.model_registry import PRODUCTION_ALIAS, log_and_register
 from scripts.train_ocr_model import (
     FEATURE_EXTRACTORS,
     build_classifier,
@@ -82,6 +82,12 @@ def parse_args():
         help="Run hyperparameter tuning with cross-validation",
     )
     p.add_argument("--cv-folds", type=int, default=5)
+    p.add_argument(
+        "--min-accuracy",
+        type=float,
+        default=0.90,
+        help="Promote the registered version to @production only above this",
+    )
     return p.parse_args()
 
 
@@ -255,44 +261,46 @@ def main():
         mlflow.log_artifact(str(cm_path))
 
         # ---- Save model locally ----
+        metrics = {
+            "accuracy": float(accuracy),
+            "macro_f1": float(macro_f1),
+            "macro_precision": float(macro_precision),
+            "macro_recall": float(macro_recall),
+            "n_train": int(len(X_train)),
+            "n_test": int(len(X_test)),
+            "synthetic_per_class": int(args.samples_per_class),
+            "plate_style_synthetic_per_class": int(args.plate_style_samples_per_class),
+        }
         save_models(
             clf,
             scaler,
             str(args.output_dir),
             feature_method=args.feature,
             classifier_name=args.classifier,
-            metrics={"accuracy": accuracy, "macro_f1": macro_f1},
+            metrics=metrics,
+            feature_dim=features.shape[1],
         )
-        metadata = {
-            "char_classes": char_list,
-            "feature_method": args.feature,
-            "classifier": args.classifier,
-            "metrics": {
-                "accuracy": accuracy,
-                "macro_f1": macro_f1,
-                "n_train": len(X_train),
-                "n_test": len(X_test),
-                "synthetic_per_class": args.samples_per_class,
-                "plate_style_synthetic_per_class": args.plate_style_samples_per_class,
-            },
-            "char_size": 32,
-            "feature_dim": features.shape[1],
-        }
         meta_path = args.output_dir / "metadata.json"
-        meta_path.write_text(json.dumps(metadata, indent=2))
-
-        # Log sklearn model to MLflow
-        mlflow.sklearn.log_model(
-            clf,
-            artifact_path="ocr_model",
-            registered_model_name="lpr-ocr-classifier",
-        )
-        mlflow.log_artifact(str(args.output_dir / "scaler.joblib"))
+        metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         mlflow.log_artifact(str(meta_path))
+
+        # ---- Register in MLflow (Pipeline: scaler -> classifier) ----
+        promote = accuracy >= args.min_accuracy
+        registered = log_and_register(clf, scaler, metadata, promote=promote)
+        if promote:
+            print(
+                f"Promoted {registered['model_name']} v{registered['model_version']} "
+                f"to @{PRODUCTION_ALIAS}"
+            )
+        else:
+            print(
+                f"Accuracy {accuracy:.4f} < {args.min_accuracy}: registered "
+                f"v{registered['model_version']} but NOT promoted"
+            )
 
         print(f"\nMLflow run ID: {run.info.run_id}")
         print(f"MLflow experiment: {args.experiment_name}")
-        print("Model registered as: lpr-ocr-classifier")
+        print(f"Model registered as: {registered['model_name']}")
 
 
 if __name__ == "__main__":

@@ -178,29 +178,43 @@ class LPRPipeline:
             metadata_path = os.path.join(models_dir, "char_classes.json")
 
         if os.path.exists(classifier_path) and os.path.exists(scaler_path):
-            self.svm_model = joblib.load(classifier_path)
-            self.scaler = joblib.load(scaler_path)
+            metadata = {}
             if os.path.exists(metadata_path):
                 with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
-                self.char_classes = (
-                    metadata.get("char_classes")
-                    or metadata.get("classes")
-                    or self.char_classes
-                )
-                self.feature_method = _normalise_feature_method(
-                    metadata.get("feature_method", self.feature_method)
-                )
-                self.classifier_name = metadata.get("classifier", self.classifier_name)
-            n_features = getattr(self.scaler, "n_features_in_", None)
-            if self.feature_method == "hog" and n_features == 324:
-                self.feature_method = "hog_legacy"
+            self.set_ocr_model(
+                joblib.load(classifier_path), joblib.load(scaler_path), metadata
+            )
             print(
                 f"Loaded OCR model from {models_dir} "
                 f"({self.feature_method} + {self.classifier_name})"
             )
         else:
             print(f"Model files not found in {models_dir}")
+
+    def set_ocr_model(self, classifier, scaler, metadata=None):
+        """Installs an already-loaded OCR classifier + scaler (local or MLflow)."""
+        metadata = metadata or {}
+        self.svm_model = classifier
+        self.scaler = scaler
+        self.char_classes = list(
+            metadata.get("char_classes") or metadata.get("classes") or CHAR_CLASSES
+        )
+        self.feature_method = _normalise_feature_method(
+            metadata.get("feature_method", self.feature_method)
+        )
+        self.classifier_name = metadata.get("classifier", self.classifier_name)
+
+        n_features = getattr(scaler, "n_features_in_", None)
+        declared_dim = metadata.get("feature_dim")
+        if declared_dim and n_features and int(declared_dim) != n_features:
+            raise ValueError(
+                f"Model metadata declares feature_dim={declared_dim} but the "
+                f"scaler expects {n_features} features"
+            )
+        # Old artifacts stored "hog" for the 8x8-cell (324-d) variant.
+        if self.feature_method == "hog" and n_features == 324:
+            self.feature_method = "hog_legacy"
 
     def load_yolo_model(self, yolo_model_path):
         """Loads the YOLOv8 model for detection."""
