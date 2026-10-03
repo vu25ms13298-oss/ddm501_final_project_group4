@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -23,9 +24,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.classifier import CHAR_CLASSES, generate_synthetic_chars
-from src.features import extract_hog_features
+from src.classifier import (
+    CHAR_CLASSES,
+    generate_plate_style_synthetic_chars,
+    generate_synthetic_chars,
+)
 from responsible_ai.explainability import load_model
+
+EVAL_SEED = 20261003
 
 
 VISUALLY_SIMILAR_GROUPS = {
@@ -127,17 +133,26 @@ def analyze_per_class_fairness(y_true, y_pred, char_list):
 
 def generate_fairness_report(output_dir: str, models_dir: str):
     """Generate the complete fairness analysis report."""
-    clf, scaler = load_model(models_dir)
+    clf, scaler, extract_fn = load_model(models_dir)
     char_list = list(CHAR_CLASSES)
 
     print("Generating evaluation data...")
-    np.random.seed(42)
-    x_imgs, y_true = generate_synthetic_chars(
+    # Training uses seed 42; a different seed avoids re-generating training
+    # samples. Plate-style glyphs are harder and closer to real segmented chars.
+    random.seed(EVAL_SEED)
+    np.random.seed(EVAL_SEED)
+    x_clean, y_clean = generate_synthetic_chars(
         char_classes=CHAR_CLASSES,
-        samples_per_class=50,
+        samples_per_class=25,
         img_size=64,
     )
-    features = extract_hog_features(x_imgs)
+    x_plate, y_plate = generate_plate_style_synthetic_chars(
+        char_classes=CHAR_CLASSES,
+        samples_per_class=50,
+    )
+    x_imgs = np.concatenate([x_clean, x_plate])
+    y_true = np.concatenate([y_clean, y_plate])
+    features = extract_fn(x_imgs)
     X_scaled = scaler.transform(features)
     y_pred = clf.predict(X_scaled)
 
