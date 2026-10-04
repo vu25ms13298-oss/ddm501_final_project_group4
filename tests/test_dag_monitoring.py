@@ -16,7 +16,10 @@ def test_parse_prom_value():
     empty = {"status": "success", "data": {"result": []}}
     assert parse_prom_value(empty) is None
 
-    nan_val = {"status": "success", "data": {"result": [{"value": [1600000000, "NaN"]}]}}
+    nan_val = {
+        "status": "success",
+        "data": {"result": [{"value": [1600000000, "NaN"]}]},
+    }
     assert parse_prom_value(nan_val) is None
 
     err = {"status": "error"}
@@ -44,6 +47,7 @@ def test_evaluate_drift_detected():
         "api_up": 1.0,
         "success_rate": 0.40,  # Below 0.5 threshold
         "brightness_drift_ratio": 0.45,  # Above 0.3 threshold
+        "predictions_15m": 120.0,  # Enough volume for the statistics to count
     }
     t = Thresholds()
     res = evaluate(metrics, t, api_health={"model_loaded": True})
@@ -52,6 +56,31 @@ def test_evaluate_drift_detected():
     v_metrics = [v["metric"] for v in res["violations"]]
     assert "success_rate" in v_metrics
     assert "brightness_drift_ratio" in v_metrics
+
+
+def test_evaluate_ignores_statistics_on_low_volume():
+    # One cold-start request among three pushes p95 to the 10 s bucket.
+    metrics = {
+        "api_up": 1.0,
+        "p95_latency_s": 10.0,
+        "success_rate": 0.0,
+        "predictions_15m": 3.0,
+    }
+    res = evaluate(metrics, Thresholds(), api_health={"model_loaded": True})
+    assert res["healthy"] is True
+    assert res["drift_detected"] is False
+
+
+def test_evaluate_flags_latency_with_enough_volume():
+    metrics = {"api_up": 1.0, "p95_latency_s": 4.2, "predictions_15m": 50.0}
+    res = evaluate(metrics, Thresholds(), api_health={"model_loaded": True})
+    assert [v["metric"] for v in res["violations"]] == ["p95_latency_s"]
+
+
+def test_low_volume_still_reports_availability_problems():
+    metrics = {"api_up": 0.0, "predictions_15m": 0.0}
+    res = evaluate(metrics, Thresholds(), api_health={"model_loaded": False})
+    assert {v["metric"] for v in res["violations"]} == {"api_up", "model_loaded"}
 
 
 def test_evaluate_api_down():
@@ -73,7 +102,7 @@ def test_format_summary():
 
 
 def test_airflow_dag_loads_cleanly():
-    airflow = pytest.importorskip("airflow")
+    pytest.importorskip("airflow")
     from airflow.models import DagBag
 
     dagbag = DagBag(dag_folder="dags", include_examples=False)

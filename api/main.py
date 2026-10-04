@@ -145,6 +145,28 @@ def _load_ocr_into(p: LPRPipeline) -> tuple[str, str | None]:
     return ("local", None) if p.svm_model is not None else ("none", None)
 
 
+WARM_UP_IMAGE_SHAPE = (480, 640, 3)
+
+
+def _warm_up(p: LPRPipeline):
+    """Runs one throw-away inference so lazy initialisation (YOLO/torch graph,
+    first sklearn call) happens before real traffic instead of on the first
+    request, which otherwise took 5-10 s. Not recorded in the metrics."""
+    if p.svm_model is None:
+        return
+    t0 = time.time()
+    try:
+        p.recognize(
+            np.full(WARM_UP_IMAGE_SHAPE, 127, dtype=np.uint8),
+            assume_plate_crop=False,
+            verbose=False,
+        )
+    except Exception:
+        logger.warning("Warm-up inference failed", exc_info=True)
+        return
+    logger.info("Warm-up inference done in %.2fs", time.time() - t0)
+
+
 def load_pipeline():
     global model_source, model_version
     p = LPRPipeline()
@@ -156,6 +178,7 @@ def load_pipeline():
             "YOLO weights not found at %s; using contour fallback detection",
             YOLO_MODEL_PATH,
         )
+    _warm_up(p)
     model_source, model_version = source, version
     MODEL_INFO_GAUGE.clear()
     MODEL_INFO_GAUGE.labels(

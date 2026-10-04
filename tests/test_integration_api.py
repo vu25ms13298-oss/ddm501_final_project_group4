@@ -328,7 +328,9 @@ class TestModelSource:
 
 
 class TestRateLimiting:
-    def test_rate_limit_exceeded_returns_429_with_retry_after(self, client, monkeypatch):
+    def test_rate_limit_exceeded_returns_429_with_retry_after(
+        self, client, monkeypatch
+    ):
         from api import main as api_main
         import time
 
@@ -348,8 +350,37 @@ class TestRateLimiting:
         api_main._client_request_times["testclient"] = [time.time(), time.time()]
         api_main._client_request_times["127.0.0.1"] = [time.time(), time.time()]
 
-        resp = client.post("/predict", files={"file": ("test.jpg", b"fake", "image/jpeg")})
+        resp = client.post(
+            "/predict", files={"file": ("test.jpg", b"fake", "image/jpeg")}
+        )
         assert resp.status_code == 429
         assert "Rate limit exceeded" in resp.json()["detail"]
         assert "Retry-After" in resp.headers
         assert int(resp.headers["Retry-After"]) >= 1
+
+
+class TestWarmUp:
+    def test_warm_up_runs_one_inference(self):
+        fake = _FakePipeline()
+        api_main._warm_up(fake)
+        assert len(fake.calls) == 1
+        assert fake.calls[0]["shape"] == api_main.WARM_UP_IMAGE_SHAPE
+
+    def test_warm_up_failure_does_not_raise(self):
+        api_main._warm_up(_FakePipeline(fail=True))
+
+    def test_warm_up_skipped_without_model(self):
+        fake = _FakePipeline()
+        fake.svm_model = None
+        api_main._warm_up(fake)
+        assert fake.calls == []
+
+    def test_warm_up_not_counted_in_prediction_metrics(self):
+        before = api_main.PREDICTION_LATENCY.labels(
+            model_name=api_main.MODEL_NAME
+        )._sum.get()
+        api_main._warm_up(_FakePipeline())
+        after = api_main.PREDICTION_LATENCY.labels(
+            model_name=api_main.MODEL_NAME
+        )._sum.get()
+        assert after == before

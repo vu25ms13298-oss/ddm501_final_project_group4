@@ -45,6 +45,9 @@ PROMQL: dict[str, str] = {
 # Metrics whose violation means the *input data* (or outputs) drifted.
 DRIFT_METRICS = {"success_rate", "brightness_drift_ratio", "width_drift_ratio"}
 
+# Statistics that are meaningless on very few predictions (see min_predictions).
+VOLUME_SENSITIVE_METRICS = DRIFT_METRICS | {"p95_latency_s"}
+
 
 @dataclass(frozen=True)
 class Thresholds:
@@ -53,6 +56,9 @@ class Thresholds:
     max_error_rate: float = 0.1
     max_brightness_drift: float = 0.3
     max_width_drift: float = 0.5
+    # Percentiles and ratios over a handful of requests are noise (e.g. one cold
+    # start makes p95 = 10 s with 3 samples); judge them only above this volume.
+    min_predictions: float = 20
 
     @classmethod
     def from_env(cls) -> "Thresholds":
@@ -69,6 +75,7 @@ class Thresholds:
             max_error_rate=_f("MAX_ERROR_RATE", d.max_error_rate),
             max_brightness_drift=_f("MAX_BRIGHTNESS_DRIFT", d.max_brightness_drift),
             max_width_drift=_f("MAX_WIDTH_DRIFT", d.max_width_drift),
+            min_predictions=_f("MIN_PREDICTIONS", d.min_predictions),
         )
 
 
@@ -116,9 +123,12 @@ def evaluate(
         ("width_drift_ratio", lambda v: v > t.max_width_drift, t.max_width_drift),
     ]
 
+    low_volume = (metrics.get("predictions_15m") or 0) < t.min_predictions
     violations = []
     for name, breached, threshold in rules:
         value = metrics.get(name)
+        if low_volume and name in VOLUME_SENSITIVE_METRICS:
+            continue
         if value is not None and breached(value):
             violations.append(
                 {

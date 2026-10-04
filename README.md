@@ -494,6 +494,27 @@ uvicorn api.main:app --reload --port 8000
 pytest tests/ -v
 ```
 
+## Upgrading an Existing Stack (MinIO + multi-container Airflow)
+
+Stacks created before MinIO / the split Airflow services need two one-off steps;
+fresh clones do not.
+
+1. **Airflow database**: `airflow-init` now creates the `airflow` database when it
+   is missing (the postgres init script only runs on an empty volume). Remove the
+   old container with `docker compose up -d --build --remove-orphans`.
+2. **MLflow artifacts**: registered models created before MinIO still have their
+   files in the old `mlflow_artifacts` volume. Copy them into the bucket, then
+   reload the API — otherwise the API cannot load `@production` and silently falls
+   back to the baked-in model (`/model/info` shows `model_source: local`):
+
+```bash
+docker run --rm --network ddm501_final_project_group4_lpr_network \
+  -v ddm501_final_project_group4_mlflow_artifacts:/old:ro \
+  --entrypoint sh cgr.dev/chainguard/minio-client:latest-dev \
+  -c 'mc alias set local http://minio:9000 minio minio123 && mc mirror /old local/mlflow-artifacts'
+curl -X POST http://localhost:8000/model/reload -H "X-Admin-Token: $API_ADMIN_TOKEN"
+```
+
 ## Troubleshooting
 
 **Docker build fails with memory error**: Increase Docker memory to 8GB+ (Settings → Resources).

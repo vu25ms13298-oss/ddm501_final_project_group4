@@ -61,7 +61,9 @@ def test_simulator_stats_reset(mock_config):
 
 def test_simulator_send_prediction_mock(mock_config):
     sim = LPRTrafficSimulator(config_path=mock_config)
-    sample = Sample(name="test.png", image=np.zeros((64, 64, 3), dtype=np.uint8), is_crop=True)
+    sample = Sample(
+        name="test.png", image=np.zeros((64, 64, 3), dtype=np.uint8), is_crop=True
+    )
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -81,13 +83,18 @@ def test_simulator_send_prediction_mock(mock_config):
 
 def test_simulator_send_prediction_429_retry(mock_config):
     sim = LPRTrafficSimulator(config_path=mock_config)
-    sample = Sample(name="test.png", image=np.zeros((64, 64, 3), dtype=np.uint8), is_crop=True)
+    sample = Sample(
+        name="test.png", image=np.zeros((64, 64, 3), dtype=np.uint8), is_crop=True
+    )
 
     mock_resp = MagicMock()
     mock_resp.status_code = 429
     mock_resp.headers = {"Retry-After": "0"}
 
-    with patch("requests.post", return_value=mock_resp), patch("time.sleep") as mock_sleep:
+    with (
+        patch("requests.post", return_value=mock_resp),
+        patch("time.sleep") as mock_sleep,
+    ):
         res = sim.send_prediction(sample, respect_rate_limit=True)
         assert res["status_code"] == 429
         assert sim.stats["rate_limited_429"] == 1

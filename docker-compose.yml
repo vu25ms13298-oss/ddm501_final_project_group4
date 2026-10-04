@@ -237,11 +237,24 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: lpr_airflow_init
+    environment:
+      <<: *airflow-env
+      # The image entrypoint waits for the Airflow DB before running the command,
+      # which never succeeds while the "airflow" database is still missing.
+      CONNECTION_CHECK_MAX_COUNT: "0"
     depends_on:
       postgres:
         condition: service_healthy
+    # docker/postgres/init-airflow-db.sql only runs on an empty postgres volume,
+    # so stacks upgraded from the single-container Airflow (existing MLflow data)
+    # have no "airflow" database. Create it here when missing.
     command: >
-      bash -c "airflow db migrate &&
+      bash -c "python -c \"import psycopg2;
+      c = psycopg2.connect(host='postgres', user='mlflow', password='mlflow', dbname='mlflow');
+      c.autocommit = True; cur = c.cursor();
+      cur.execute('SELECT 1 FROM pg_database WHERE datname = %s', ('airflow',));
+      cur.fetchone() or cur.execute('CREATE DATABASE airflow')\" &&
+      airflow db migrate &&
       (airflow users create --username admin --password admin
       --firstname Admin --lastname User --role Admin --email admin@example.com || true)"
     restart: "no"
