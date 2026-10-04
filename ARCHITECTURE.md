@@ -2,46 +2,48 @@
 
 ## 1. High-Level Architecture
 
+Twelve containers on one Docker Compose network (`lpr_network`): ten long-running
+services plus two one-shot init containers. Every long-running service has a healthcheck.
+
+```mermaid
+flowchart LR
+    client["Client / camera<br/>simulations/"] -->|"POST /predict"| api
+
+    subgraph serving["Serving"]
+        api["API · FastAPI :8000<br/>YOLOv8 + HOG/SVM"]
+    end
+
+    subgraph lifecycle["Model lifecycle"]
+        airflow["Airflow :8080<br/>webserver + scheduler"]
+        trainer["trainer<br/>(on demand)"]
+        mlflow["MLflow :5000<br/>tracking + registry"]
+        minio[("MinIO :9000<br/>artifacts")]
+        postgres[("PostgreSQL :5432<br/>MLflow + Airflow DB")]
+    end
+
+    subgraph observability["Observability"]
+        prometheus["Prometheus :9090<br/>15 alert rules"]
+        grafana["Grafana :3000<br/>17 panels"]
+        alertmanager["Alertmanager :9093"]
+        receiver["alert-receiver :9094<br/>log / Slack"]
+    end
+
+    api -->|"load models:/...@production"| mlflow
+    airflow -->|"log runs, register, set alias"| mlflow
+    trainer -->|"log runs, register"| mlflow
+    airflow -->|"POST /model/reload"| api
+    airflow -->|"PromQL (monitoring DAG)"| prometheus
+    mlflow --> minio
+    mlflow --> postgres
+    airflow --> postgres
+    prometheus -->|"scrape /metrics every 10s"| api
+    grafana --> prometheus
+    prometheus -->|"firing alerts"| alertmanager
+    alertmanager -->|"webhook"| receiver
 ```
-                          ┌─────────────────────────────────────────────────────────────┐
-                          │                   Docker Compose Network                     │
-                          │                                                             │
-  ┌──────────────┐        │    ┌──────────┐          ┌──────────────────────┐           │
-  │ Client / CLI │────────┼───>│ FastAPI  │─────────>│    LPR Pipeline      │           │
-  │ (Browser /   │<───────┼────│  :8000   │<─────────│ (Preprocessing →     │           │
-  │  curl)       │        │    └────┬─────┘          │  Detection → OCR)    │           │
-  └──────────────┘        │         │                └──────────────────────┘           │
-                          │         │ /metrics                                          │
-  ┌──────────────┐        │         ▼                                                   │
-  │ Traffic &    │        │    ┌──────────┐          ┌──────────────────────┐           │
-  │ Drift        │────────┼───>│Prometheus│─────────>│       Grafana        │           │
-  │ Simulations  │        │    │  :9090   │          │        :3000         │           │
-  │(7 Scenarios) │        │    └────┬─────┘          └──────────────────────┘           │
-  └──────────────┘        │         │                                                   │
-                          │         │ PromQL metrics query                              │
-                          │         ▼                                                   │
-                          │    ┌──────────────────┐  reload  ┌──────────┐               │
-                          │    │ Airflow          │─────────>│ FastAPI  │               │
-                          │    │ Scheduler        │          │  :8000   │               │
-                          │    │ (LocalExecutor)  │          └──────────┘               │
-                          │    └────┬─────────────┘                                     │
-                          │         │                                                   │
-                          │         │ register & query @production                      │
-                          │         ▼                                                   │
-  ┌──────────────┐        │    ┌──────────┐  artifacts   ┌──────────────────┐           │
-  │ Airflow Web  │────────┼───>│  MLflow  │─────────────>│   MinIO (S3)     │           │
-  │   :8080      │        │    │  :5000   │              │   :9000 / :9001  │           │
-  └──────────────┘        │    └────┬─────┘              └──────────────────┘           │
-                          │         │ metadata                   ▲                      │
-                          │         ▼                            │ bucket:              │
-                          │    ┌──────────┐                      │ mlflow-artifacts     │
-                          │    │PostgreSQL│                      │                      │
-                          │    │  :5432   │                      │ (minio-init)         │
-                          │    │ (mlflow, │                      │                      │
-                          │    │  airflow)│                      │                      │
-                          │    └──────────┘                      │                      │
-                          └──────────────────────────────────────┴──────────────────────┘
-```
+
+One-shot containers: `minio-init` (creates the `mlflow-artifacts` bucket) and
+`airflow-init` (creates/migrates the Airflow DB and the admin user).
 
 ---
 
@@ -150,6 +152,11 @@ Input Image (RGB)
 - **Alert Rules**:
   - **Production Drift Alerts (1h vs 7d window)**: Long-term drift detection for `InputBrightnessDrift`, `InputResolutionDrift`, and `LowRecognitionSuccessRate`.
   - **Fast Drift Alerts (`drift_alerts_fast`, 5m vs 1h window)**: Short-window alerts reacting within 2–5 minutes for live demonstrations and simulation scenarios (`InputBrightnessDriftFast`, `InputResolutionDriftFast`, `LowRecognitionSuccessRateFast`, `RateLimitBurst`).
+- **Alertmanager** (`config/alertmanager/alertmanager.yml`): groups alerts by name and
+  severity, pages critical alerts after 10s and repeats hourly, batches info alerts, and
+  inhibits warnings while `APIDown` is firing. Notifications go to **alert-receiver**
+  (`docker/alert-receiver/receiver.py`), which logs each alert, keeps the last 50 at
+  `GET :9094/alerts` and forwards to Slack when `SLACK_WEBHOOK_URL` is set.
 - **Grafana**:
   - Pre-provisioned dashboards with 10s auto-refresh (`http://localhost:3000`).
   - Panels track throughput, p50/p95/p99 latency, recognition success rates, character count distributions, input brightness/resolution curves, HTTP status codes (200/400/429), and rate-limited events.
@@ -175,7 +182,7 @@ Input Image (RGB)
 - **Runner Features**: Token-bucket rate pacing, automatic `Retry-After` backoff handling, multi-threaded worker pools, and instant Prometheus snapshot summaries.
 
 ### 2.8. Trainer (On-Demand Training Environment)
-`docker/trainer/Dockerfile` (Compose profile `train`) runs `scripts/train_with_mlflow.py` with pinned library versions matching the API and Airflow containers, ensuring 100% binary compatibility across environments:
+`trainer/Dockerfile` (Compose profile `train`) runs `scripts/train_with_mlflow.py` with pinned library versions matching the API and Airflow containers, ensuring 100% binary compatibility across environments:
 ```bash
 docker compose run --rm trainer python scripts/train_with_mlflow.py --tune
 ```
@@ -186,40 +193,73 @@ docker compose run --rm trainer python scripts/train_with_mlflow.py --tune
 ```
 Push/PR → Linting (ruff, black on src, api, dags, simulations)
         → Tests (unit, integration, data quality, e2e; coverage ≥ 80%)
-        → Synthetic Plate Quality Gate
-        → Docker Compose validation (docker compose config --quiet)
+        → Synthetic Plate Quality Gate (char accuracy >= 85%, exact plate >= 50%)
+        → Docker Compose validation + build of the API, MLflow, Airflow and trainer images
+Manual dispatch (full-pipeline.yml) → push images to GitHub Container Registry
 ```
 
 ---
 
-## 3. Data Flow Diagram
+## 3. Data Flow
 
+### 3.1. Inference request (with edge cases)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as FastAPI
+    participant P as LPR pipeline
+    participant M as Prometheus
+    C->>A: POST /predict (image, assume_plate_crop)
+    alt over RATE_LIMIT_PER_MINUTE for this IP
+        A-->>C: 429 + Retry-After
+    else empty, undecodable or > MAX_UPLOAD_MB
+        A-->>C: 400 / 413
+    else no model loaded
+        A-->>C: 503
+    else valid image
+        A->>P: recognize() in threadpool
+        P->>P: preprocess (CLAHE, bilateral)
+        alt YOLO weights available
+            P->>P: YOLOv8 plate detection
+        else
+            P->>P: contour fallback detection
+        end
+        P->>P: rectify, 1/2-line split, segment chars (32x32)
+        P->>P: HOG 1764-d + SVM, plate-grammar correction
+        P-->>A: plate text, type, confidence, format score
+        A-->>C: 200 PredictionResponse
+    end
+    M->>A: scrape /metrics (latency, errors, drift signals)
 ```
-┌──────────────────┐    POST /predict (image file)    ┌──────────────────┐
-│  Client /        │ ───────────────────────────────> │  FastAPI Server  │
-│  Simulation Tool │                                  └────────┬─────────┘
-└──────────────────┘                                           │ decode image
-                                                               ▼
-                                                      ┌──────────────────┐
-                                                      │  LPR Pipeline    │
-                                                      │  .recognize()    │
-                                                      └────────┬─────────┘
-                                                               │
-                     ┌─────────────────────────────────────────┼────────────────────────────────────────┐
-                     ▼                                         ▼                                        ▼
-             preprocess_scene                             detect_plate                            segment_plate
-             (CLAHE + bilateral)                          (YOLO / contour)                        (binarize + CC)
-                     │                                         │                                        │
-                     └─────────────────────────────────────────┼────────────────────────────────────────┘
-                                                               │
-                                                               ▼
-                                                      extract_hog_features
-                                                               │
-                                                               ▼
-                                                      SVM predict & format
-                                                               │
-                                                               ▼
-                                                      JSON Response + Metrics
+
+### 3.2. Training, registration and serving
+
+```mermaid
+flowchart LR
+    gen["generate_data"] --> val{"validate_data<br/>data gate"}
+    val -->|"NaN, range, classes OK"| feat["extract_features<br/>HOG 1764-d"]
+    val -->|"violation"| stop1["AirflowFailException<br/>nothing trained"]
+    feat --> train["train<br/>SVM + 3-fold CV"] --> eval["evaluate<br/>log to MLflow"]
+    eval --> gate{"model gate<br/>acc >= 0.90 and<br/>acc >= champion"}
+    gate -->|"no"| keep["registered, not promoted<br/>@production unchanged"]
+    gate -->|"yes"| promote["set alias @production"]
+    promote --> reload["reload_api<br/>POST /model/reload"]
+    reload --> api["API serves new version<br/>(no restart)"]
+```
+
+### 3.3. Monitoring and alerting
+
+```mermaid
+flowchart LR
+    api["API /metrics"] --> prom["Prometheus<br/>15 rules"]
+    prom --> grafana["Grafana dashboards"]
+    prom -->|"firing / resolved"| am["Alertmanager<br/>group, route by severity,<br/>inhibit when APIDown"]
+    am --> recv["alert-receiver<br/>log + optional Slack"]
+    dag["monitoring DAG<br/>every 15 min"] -->|"PromQL"| prom
+    dag -->|"health, model consistency, canary"| api
+    dag -->|"drift and AUTO_RETRAIN_ON_DRIFT"| retrain["trigger lpr_training_pipeline"]
 ```
 
 ---
