@@ -7,4 +7,37 @@ dataset/images/val/Dieu_0005.png,51B03271,false,medium,yellow plate; blurry (52 
 dataset/images/train/Dieu_0006.png,51B03271,false,high,yellow plate
 dataset/images/train/Dieu_0007.png,62H76356,false,high,motorbike plate 62-H7; second small plate ignored
 dataset/images/train/Dieu_0008.png,62A25781,false,high,white plate
+dataset/images/train/Dieu_0010.png,59S361475,false,high,motorbike plate 59-S3
+dataset/images/train/Dieu_0011.png,60C56611,false,high,same vehicle as Dieu_0012
+dataset/images/train/Dieu_0012.png,60C56611,false,high,same vehicle as Dieu_0011
+dataset/images/train/Dieu_0013.png,72G180117,false,high,motorbike plate 72-G1
+dataset/images/train/Dieu_0014.png,60K26831,false,high,
+dataset/images/train/Dieu_0015.png,50E01296,false,high,yellow plate; same vehicle as Dieu_0016
+dataset/images/train/Dieu_0016.png,50E01296,false,high,yellow plate; same vehicle as Dieu_0015
 dataset/images/val/Dieu_0017.png,51K36443,false,high,white plate
+dataset/images/val/Dieu_0018.png,51C77737,false,medium,slightly blurry
+dataset/images/train/Dieu_0019.png,51G20995,false,high,
+dataset/images/train/Dieu_0020.png,55X86135,false,high,motorbike plate 55-X8
+dataset/images/train/Dieu_0021.png,51A61294,false,high,
+dataset/images/train/Dieu_0025.png,59X408156,false,high,motorbike plate 59-X4
+dataset/images/train/Dieu_0028.png,51K50896,false,high,
+dataset/images/train/Dieu_0029.png,51A18281,false,high,
+dataset/images/train/Dieu_0030.png,51H69031,false,high,
+dataset/images/train/Dieu_0031.png,51G78088,false,high,
+dataset/images/train/Dieu_0032.png,29H50138,false,high,
+dataset/images/train/Dieu_0034.png,51F09900,false,high,
+dataset/images/val/Dieu_0035.png,51D67938,false,medium,top line partly occluded
+dataset/images/train/Dieu_0036.png,51C02697,false,high,yellow plate
+dataset/images/val/Dieu_0037.png,79A18768,false,high,1-line plate
+dataset/images/train/Dieu_0039.png,74D141017,false,high,motorbike plate 74-D1
+dataset/images/val/Dieu_0040.png,55X25657,false,high,motorbike plate 55-X2
+dataset/images/train/Dieu_0041.png,52S43401,false,high,motorbike plate 52-S4
+dataset/images/val/Dieu_0042.png,59X195330,false,high,motorbike plate 59-X1
+dataset/images/train/Dieu_0043.png,60B356563,false,high,motorbike plate 60-B3
+dataset/images/val/Dieu_0047.png,59C109776,false,high,motorbike plate 59-C1
+dataset/images/val/Dieu_0056.png,51R35410,false,high,motorbike plate 51-R3
+dataset/images/val/Dieu_0058.png,51G09348,false,high,1-line plate
+dataset/images/val/Dieu_0063.png,38A27374,false,high,1-line yellow plate
+dataset/images/val/Dieu_0067.png,66K96113,false,high,motorbike plate 66-K9
+dataset/images/val/Dieu_0075.png,59S211402,false,medium,small (35 px) motorbike plate 59-S2
+dataset/images/val/Dieu_0077.png,86B457818,false,high,motorbike plate 86-B4

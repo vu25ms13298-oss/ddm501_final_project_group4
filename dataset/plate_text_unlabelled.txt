@@ -1,0 +1,9 @@
+# Sample images excluded from plate-text labelling (plate unreadable or ambiguous)
+Dieu_0009  three plates 26-30 px wide, unreadable
+Dieu_0022  blurry; text illegible
+Dieu_0023  blurry; bottom-line digits ambiguous
+Dieu_0024  blurry 1-line plate; illegible
+Dieu_0026  plate cut off and blurry
+Dieu_0027  blurry; bottom-line digits ambiguous
+Dieu_0033  blurry; bottom-line digits ambiguous
+Dieu_0038  series letter ambiguous (60-?7)

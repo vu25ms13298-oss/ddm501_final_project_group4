@@ -332,11 +332,12 @@ train → evaluate → register → promote only if it beats the current champio
 ## Evaluation on Real Images
 
 `dataset/` contains a 50-image sample (35 train + 15 val) of the real detection
-dataset. Plate text has so far been labelled manually for the first 10 images in
-`dataset/plate_text_labels.csv`; `Dieu_0009` is excluded because its three plates
-are 26–30 px wide and unreadable. Evaluated: **9 images, 6 distinct vehicles**,
-all 2-line plates (white, yellow and blue). The other 40 images still need text
-labels.
+dataset. Plate text was labelled manually in `dataset/plate_text_labels.csv`
+(with a `confidence` column: 38 high, 4 medium). 8 images whose plates are too
+small, blurry or ambiguous are excluded and listed in
+`dataset/plate_text_unlabelled.txt`. Evaluated: **42 images** — 24 two-line car
+plates, 15 motorbike plates (`59-S3 614.75` style), 3 one-line plates; 32 white,
+8 yellow, 2 blue. Only the largest plate in each image is labelled.
 
 ```bash
 # Mode 1 — full scene: YOLO detection + OCR (real usage)
@@ -350,22 +351,35 @@ python scripts/evaluate_lpr_end_to_end.py --manifest results/real_plate_crops/ma
 
 | Mode | Exact plate | Char accuracy |
 |---|---|---|
-| Full scene (YOLO + OCR) | **4/9 (44.4%)** | 67.1% |
-| Ground-truth crops (OCR only) | 2/9 (22.2%) | 61.8% |
+| Full scene (YOLO + OCR) | **15/42 (35.7%, 95% CI 23–51%)** | 63.2% |
+| Ground-truth crops (OCR only) | 18/42 (42.9%, 95% CI 29–58%) | 81.0% |
+
+Exact-plate accuracy by group (full scene):
+
+| Group | Exact plate |
+|---|---|
+| 2-line car plates | 11/24 (45.8%) |
+| Motorbike plates | **2/15 (13.3%)** |
+| 1-line plates | 2/3 |
+| Yellow / white / blue | 4/8 / 11/32 / **0/2** |
+| Detection-dataset train / val split | 10/27 (37.0%) / 5/15 (33.3%) |
 
 Findings:
-- YOLO located the correct plate in every failure that was inspected; errors come
-  from character segmentation/OCR.
-- **Blue plates (white text on blue)** fail completely (`Dieu_0001`, `Dieu_0002`):
-  segmentation and the synthetic training data assume dark text on a light plate.
-- Other errors are single-character confusions (1→4, 1→0, 7→1) and extra/missing
-  characters, e.g. the hyphen in motorbike plates (`62-H7`).
-- OCR is tuned to the pipeline's own YOLO crop + rectification; tight ground-truth
-  crops score lower, so mode 2 is not a cleaner OCR-only estimate here.
-- The real-image result (44%) is far below the synthetic benchmark (85%) and below
-  the 70% business target. With only 9 images (95% CI ≈ 19–73%) it is indicative,
-  not conclusive. Next steps: label more real plates, add inverted-polarity (blue
-  plate) handling and fine-tune OCR on real character crops.
+- **The real-image result (35.7%) is far below the synthetic benchmark (85%) and
+  the 70% business target.** Synthetic scores are an upper bound, as expected.
+- **Motorbike plates are the main failure mode** (13% exact): their 4-character top
+  line with a hyphen (`59-S3`) and small size break character segmentation.
+- **Blue plates (white text on blue)** fail completely: segmentation and the
+  synthetic training data assume dark text on a light plate.
+- On ground-truth crops the character accuracy rises from 63% to 81%, so roughly
+  half of the character errors come from the scene path (detection crop,
+  rectification, deskew) rather than from the HOG+SVM classifier itself.
+- Train vs val images score similarly, so YOLO having seen the train images does
+  not noticeably inflate the result.
+- Typical classifier errors: 1↔4/7, 5↔9, 6↔0, extra or missing characters.
+- Next steps: inverted-polarity handling, motorbike-specific segmentation (split
+  the top line on the hyphen), and training the OCR on real character crops taken
+  from these labels.
 
 ## End-to-End Benchmark (synthetic)
 
