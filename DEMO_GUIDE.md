@@ -14,13 +14,27 @@ flowchart LR
 
 ## 🛠️ 1. Chuẩn bị trước khi Demo
 
-### Bước 1.1: Khởi động hệ thống sạch
-Mở terminal tại thư mục gốc của project:
-```powershell
-# Dọn dẹp volume cũ và dựng mới toàn bộ hạ tầng
-docker compose down -v
-docker compose up -d --build
-```
+### Bước 1.1: Khởi động hệ thống
+
+Tùy vào trạng thái hiện tại của bạn, chọn 1 trong 2 cách sau:
+
+* **Cách A: Chạy tiếp (Giữ nguyên dữ liệu cũ, model đã train và lịch sử):**
+  ```powershell
+  # Kiểm tra các dịch vụ đang chạy:
+  docker compose ps
+
+  # Nếu container đang tắt, bật lại mà KHÔNG xóa dữ liệu:
+  docker compose up -d
+  ```
+  *(Tuyệt đối không dùng cờ `-v` để tránh mất dữ liệu MinIO S3 và database Airflow).*
+
+* **Cách B: Reset sạch từ đầu (Xóa hết dữ liệu để demo lại từ con số 0):**
+  ```powershell
+  # Dọn sạch mọi volume và build lại từ đầu:
+  docker compose down -v
+  docker compose up -d --build
+  ```
+
 > [!NOTE]
 > Đảm bảo file `.env` đã có đầy đủ cấu hình (`API_ADMIN_TOKEN=lpr-secret-admin-token-2026`, `RATE_LIMIT_PER_MINUTE=60`).
 
