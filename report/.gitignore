@@ -1,0 +1,4 @@
+# LaTeX build by-products
+*.log
+*.aux
+*.out
