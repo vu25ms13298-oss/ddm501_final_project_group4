@@ -1,5 +1,40 @@
+# ---------------------------------------------------------------------------
+# Shared Airflow configuration (webserver, scheduler and init use the same
+# image, env and mounts). With LocalExecutor tasks run inside the scheduler,
+# so it needs every mount the DAGs use.
+# ---------------------------------------------------------------------------
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/airflow/Dockerfile
+  image: lpr-airflow:2.8.4
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-lpr-airflow-secret-key}
+    AIRFLOW__WEBSERVER__WORKERS: "2"
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    LPR_API_URL: http://api:8000
+    PROMETHEUS_URL: http://prometheus:9090
+    API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
+    MONITORING_SCHEDULE: ${MONITORING_SCHEDULE:-*/15 * * * *}
+    AUTO_RETRAIN_ON_DRIFT: ${AUTO_RETRAIN_ON_DRIFT:-false}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./src:/opt/airflow/src
+    - ./models:/opt/airflow/models
+    - ./data:/opt/airflow/data
+    - ./dataset:/opt/airflow/dataset:ro
+    - airflow_logs:/opt/airflow/logs
+  networks:
+    - lpr_network
+
 services:
-  # ---- PostgreSQL (MLflow backend) ----
+  # ---- PostgreSQL (MLflow backend + Airflow metadata DB) ----
   postgres:
     image: postgres:13
     container_name: lpr_postgres
@@ -9,6 +44,9 @@ services:
       POSTGRES_DB: mlflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates the "airflow" database. Only runs on an EMPTY volume; on an
+      # existing stack run `docker compose down -v` or create it manually.
+      - ./docker/postgres/init-airflow-db.sql:/docker-entrypoint-initdb.d/10-airflow.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -19,7 +57,52 @@ services:
     networks:
       - lpr_network
 
-  # ---- MLflow tracking server ----
+  # ---- MinIO (S3-compatible artifact store for MLflow) ----
+  minio:
+    image: cgr.dev/chainguard/minio:latest-dev
+    container_name: lpr_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lpr_network
+
+  # ---- One-shot bucket creation (waits until MinIO accepts connections) ----
+  minio-init:
+    image: cgr.dev/chainguard/minio-client:latest-dev
+    container_name: lpr_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      sleep 2;
+      /usr/bin/mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb --ignore-existing local/mlflow-artifacts;
+      /usr/bin/mc anonymous set download local/mlflow-artifacts;
+      echo 'Bucket mlflow-artifacts is ready';
+      exit 0;
+      "
+    restart: "no"
+    networks:
+      - lpr_network
+
+  # ---- MLflow tracking server (artifacts proxied to MinIO) ----
   mlflow:
     build:
       context: .
@@ -28,8 +111,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - mlflow_artifacts:/mlflow-artifacts
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      # Only the MLflow server holds S3 credentials; clients (API, Airflow,
+      # trainer) read/write artifacts through http://mlflow:5000.
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      MLFLOW_S3_IGNORE_TLS: "true"
     ports:
       - "5000:5000"
     healthcheck:
@@ -62,6 +152,7 @@ services:
       API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://localhost:8000}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
     volumes:
       # YOLO weights are not committed (see README). Drop best.pt here and
       # restart the API to enable YOLO detection without rebuilding the image.
@@ -142,55 +233,65 @@ services:
     networks:
       - lpr_network
 
-  # ---- Apache Airflow (ML pipeline orchestration) ----
-  airflow:
-    build:
-      context: .
-      dockerfile: docker/airflow/Dockerfile
-    container_name: lpr_airflow
+  # ---- Apache Airflow: one-shot DB migration + admin user ----
+  airflow-init:
+    <<: *airflow-common
+    container_name: lpr_airflow_init
     depends_on:
-      mlflow:
+      postgres:
         condition: service_healthy
-    environment:
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
-      AIRFLOW__WEBSERVER__SECRET_KEY: lpr-airflow-secret-key
-      AIRFLOW__WEBSERVER__WORKERS: "2"
-      _AIRFLOW_DB_MIGRATE: "true"
-      _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: admin
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      LPR_API_URL: http://api:8000
-      API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./src:/opt/airflow/src
-      - ./models:/opt/airflow/models
-      - ./data:/opt/airflow/data
-      - airflow_data:/opt/airflow
+    command: >
+      bash -c "airflow db migrate &&
+      (airflow users create --username admin --password admin
+      --firstname Admin --lastname User --role Admin --email admin@example.com || true)"
+    restart: "no"
+
+  # ---- Apache Airflow: web UI ----
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: lpr_airflow_webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: webserver
     ports:
       - "8080:8080"
-    # /opt/airflow is a named volume, so a webserver PID file left by a previous
-    # container survives restarts and blocks the webserver ("Already running").
-    command: bash -c "rm -f /opt/airflow/airflow-webserver*.pid && exec airflow standalone"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 15s
       retries: 5
-      start_period: 120s
-    networks:
-      - lpr_network
+      start_period: 90s
+    restart: unless-stopped
+
+  # ---- Apache Airflow: scheduler (also executes tasks via LocalExecutor) ----
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: lpr_airflow_scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-  mlflow_artifacts:
+  minio_data:
   prometheus_data:
   grafana_data:
-  airflow_data:
+  airflow_logs:
 
 networks:
   lpr_network:

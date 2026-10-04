@@ -21,7 +21,11 @@ pydantic==2.9.0
 # MLflow
 mlflow==2.17.2
 
-# Testing
+# Testing and Simulation
 pytest
 pytest-cov
 httpx
+requests>=2.31.0
+pyyaml>=6.0.1
+colorama>=0.4.6
+

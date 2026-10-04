@@ -22,10 +22,10 @@ jobs:
         run: pip install ruff==0.16.9 black==25.9.0
 
       - name: Run Ruff linter
-        run: ruff check src/ api/ scripts/ tests/ responsible_ai/
+        run: ruff check src/ api/ scripts/ tests/ responsible_ai/ simulations/ dags/
 
       - name: Check Black formatting
-        run: black --check src/ api/ scripts/ tests/ responsible_ai/
+        run: black --check src/ api/ scripts/ tests/ responsible_ai/ simulations/ dags/
 
   test:
     name: Run Tests & Coverage
