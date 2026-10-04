@@ -39,7 +39,12 @@ from src.classifier import (
     save_models,
 )
 
-from src.model_registry import PRODUCTION_ALIAS, log_and_register
+from src.model_registry import (
+    PRODUCTION_ALIAS,
+    champion_accuracy,
+    log_and_register,
+    should_promote,
+)
 from scripts.train_ocr_model import (
     FEATURE_EXTRACTORS,
     build_classifier,
@@ -285,7 +290,8 @@ def main():
         mlflow.log_artifact(str(meta_path))
 
         # ---- Register in MLflow (Pipeline: scaler -> classifier) ----
-        promote = accuracy >= args.min_accuracy
+        champion_acc = champion_accuracy()
+        promote = should_promote(accuracy, args.min_accuracy, champion_acc)
         registered = log_and_register(clf, scaler, metadata, promote=promote)
         if promote:
             print(
@@ -294,8 +300,9 @@ def main():
             )
         else:
             print(
-                f"Accuracy {accuracy:.4f} < {args.min_accuracy}: registered "
-                f"v{registered['model_version']} but NOT promoted"
+                f"Registered v{registered['model_version']} but NOT promoted: "
+                f"accuracy {accuracy:.4f}, gate {args.min_accuracy}, "
+                f"champion {champion_acc}"
             )
 
         print(f"\nMLflow run ID: {run.info.run_id}")

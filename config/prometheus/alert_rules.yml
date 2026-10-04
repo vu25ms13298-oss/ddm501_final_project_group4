@@ -58,7 +58,9 @@ groups:
           description: "Median detection confidence is {{ $value }}, below 0.5 threshold."
 
       - alert: NoPredictions
-        expr: rate(model_predictions_total[15m]) == 0
+        # Sum across plate_type: otherwise a plate type that simply did not occur
+        # in the window (e.g. no 1-line plates) fires the alert while traffic flows.
+        expr: sum(rate(model_predictions_total[15m])) == 0
         for: 30m
         labels:
           severity: info

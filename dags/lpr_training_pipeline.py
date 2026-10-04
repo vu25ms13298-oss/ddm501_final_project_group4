@@ -58,6 +58,9 @@ def run_dir(ds: str) -> Path:
     start_date=datetime(2026, 9, 1),
     catchup=False,
     max_active_runs=1,
+    # Airflow pauses new DAGs by default, which silently disables the weekly
+    # retraining schedule until someone unpauses it in the UI.
+    is_paused_upon_creation=False,
     default_args={
         "retries": 2,
         "retry_delay": timedelta(seconds=30),
@@ -275,7 +278,9 @@ def lpr_training_pipeline():
         from src.model_registry import (
             PRODUCTION_ALIAS,
             REGISTERED_MODEL_NAME,
+            champion_accuracy,
             log_and_register,
+            should_promote,
         )
 
         accuracy = eval_meta["accuracy"]
@@ -291,18 +296,12 @@ def lpr_training_pipeline():
             return {"registered": False, "promoted": False}
 
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-        client = mlflow.MlflowClient()
-        champion_acc = None
-        try:
-            champion = client.get_model_version_by_alias(
-                REGISTERED_MODEL_NAME, PRODUCTION_ALIAS
-            )
-            champion_acc = client.get_run(champion.run_id).data.metrics.get("accuracy")
-        except Exception:
+        champion_acc = champion_accuracy(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
+        if champion_acc is None:
             log.info(
                 "No current @%s model; this run becomes champion", PRODUCTION_ALIAS
             )
-        promote = champion_acc is None or accuracy >= champion_acc
+        promote = should_promote(accuracy, MIN_ACCURACY, champion_acc)
 
         metadata = {
             "char_classes": list(CHAR_CLASSES),

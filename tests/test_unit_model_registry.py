@@ -8,9 +8,11 @@ from sklearn.svm import SVC
 from src.model_registry import (
     PRODUCTION_ALIAS,
     build_sklearn_pipeline,
+    champion_accuracy,
     load_from_registry,
     log_and_register,
     resolve_model_uri,
+    should_promote,
     split_sklearn_pipeline,
 )
 
@@ -95,3 +97,25 @@ class TestResolveModelUri:
     def test_non_alias_uri_is_unchanged(self):
         assert resolve_model_uri("models:/m/3") == ("models:/m/3", None)
         assert resolve_model_uri("runs:/abc/model") == ("runs:/abc/model", None)
+
+
+class TestPromotionRule:
+    def test_below_gate_is_never_promoted(self):
+        assert not should_promote(0.85, 0.90, champion_acc=None)
+
+    def test_first_model_above_gate_becomes_champion(self):
+        assert should_promote(0.91, 0.90, champion_acc=None)
+
+    def test_challenger_worse_than_champion_is_rejected(self):
+        assert not should_promote(0.9006, 0.90, champion_acc=0.9293)
+
+    def test_challenger_matching_champion_is_promoted(self):
+        assert should_promote(0.93, 0.90, champion_acc=0.93)
+
+    def test_champion_accuracy_reads_run_metric(self, fitted_model, local_mlflow):
+        clf, scaler, _ = fitted_model
+        assert champion_accuracy() is None
+        with mlflow.start_run():
+            mlflow.log_metric("accuracy", 0.95)
+            log_and_register(clf, scaler, {}, promote=True)
+        assert champion_accuracy() == pytest.approx(0.95)

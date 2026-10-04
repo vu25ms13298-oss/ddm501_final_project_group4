@@ -82,6 +82,31 @@ def log_and_register(
     }
 
 
+def champion_accuracy(
+    model_name: str = REGISTERED_MODEL_NAME, alias: str = PRODUCTION_ALIAS
+) -> float | None:
+    """Accuracy logged by the run behind ``@alias``, or None without a champion."""
+    import mlflow
+    from mlflow.exceptions import MlflowException
+
+    client = mlflow.MlflowClient()
+    try:
+        champion = client.get_model_version_by_alias(model_name, alias)
+    except MlflowException:
+        return None
+    return client.get_run(champion.run_id).data.metrics.get("accuracy")
+
+
+def should_promote(
+    accuracy: float, min_accuracy: float, champion_acc: float | None
+) -> bool:
+    """Champion/challenger rule shared by the Airflow DAG and manual training:
+    promote only above the quality gate and when not worse than the champion."""
+    if accuracy < min_accuracy:
+        return False
+    return champion_acc is None or accuracy >= champion_acc
+
+
 def resolve_model_uri(model_uri: str) -> tuple[str, str | None]:
     """Turns ``models:/name@alias`` into ``(models:/name/<version>, version)``.
 
