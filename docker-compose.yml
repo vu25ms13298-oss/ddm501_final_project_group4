@@ -195,6 +195,9 @@ services:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./config/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - prometheus_data:/prometheus
+    depends_on:
+      alertmanager:
+        condition: service_healthy
     ports:
       - "9090:9090"
     command:
@@ -203,6 +206,45 @@ services:
       - "--web.enable-lifecycle"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - lpr_network
+
+  # ---- Alertmanager: groups, routes and inhibits Prometheus alerts ----
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: lpr_alertmanager
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    ports:
+      - "9093:9093"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - lpr_network
+
+  # ---- Alert receiver: logs every notification (optionally forwards to Slack) ----
+  alert-receiver:
+    image: python:3.10-slim
+    container_name: lpr_alert_receiver
+    command: ["python", "/app/receiver.py"]
+    environment:
+      ALERT_LOG: /data/alerts.jsonl
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    volumes:
+      - ./docker/alert-receiver:/app:ro
+      - ./data/alerts:/data
+    ports:
+      - "9094:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 3

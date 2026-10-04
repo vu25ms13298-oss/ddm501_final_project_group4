@@ -133,6 +133,8 @@ docker compose up -d --build
 | Airflow       | http://localhost:8080       | admin / admin   |
 | Prometheus    | http://localhost:9090       | —               |
 | Grafana       | http://localhost:3000       | admin / admin   |
+| Alertmanager  | http://localhost:9093       | —               |
+| Alert receiver| http://localhost:9094/alerts| —               |
 
 ### 3. Test the API
 
@@ -301,6 +303,21 @@ Pre-configured dashboard at http://localhost:3000 includes:
 - `LowRecognitionSuccessRate` — <50% of predictions have a valid plate format (30 min)
 - `InputBrightnessDrift` / `InputResolutionDrift` — 1h mean deviates from the 7-day
   baseline by >30% / >50%
+- `*Fast` variants (5 min vs 1 h windows) and `RateLimitBurst` for live demos and the
+  simulation toolkit; `NoPredictions`, `LowDetectionConfidence`, `PrometheusTargetDown`
+
+### Alert Notifications
+Prometheus sends firing and resolved alerts to **Alertmanager**
+(`config/alertmanager/alertmanager.yml`), which groups them by name and severity,
+notifies critical alerts after 10 s (repeat every hour), batches info alerts, and
+suppresses warnings while `APIDown` is firing. Notifications go to **alert-receiver**,
+which logs each one and can forward it to Slack:
+
+```bash
+docker compose logs -f alert-receiver      # [FIRING] critical APIDown: LPR API is down
+curl http://localhost:9094/alerts          # last 50 notifications as JSON
+# Slack: set SLACK_WEBHOOK_URL in .env, then: docker compose up -d alert-receiver
+```
 
 ## Experiment Tracking & Model Registry (MLflow)
 
@@ -453,7 +470,7 @@ pytest tests/ --cov=src --cov=api --cov-report=term-missing
 docker compose run --rm -v "$PWD:/app" trainer pytest tests/ --cov=src --cov=api
 ```
 
-Current result: 110 tests, 80.5% line coverage (`src/` + `api/`). Uncovered code is
+Current result: 149 tests, 81.8% line coverage (`src/` + `api/`). Uncovered code is
 mostly the optional ResNet18/YOLO-training paths that need torch, which CI does
 not install.
 

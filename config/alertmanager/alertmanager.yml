@@ -1,0 +1,31 @@
+# Alertmanager: routes Prometheus alerts (config/prometheus/alert_rules.yml) to the
+# alert-receiver service, which logs every notification and can forward it to
+# Slack (SLACK_WEBHOOK_URL). Swap the receiver for email/Slack/PagerDuty in production.
+route:
+  receiver: ops-webhook
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Outages page faster and repeat more often than warnings.
+    - matchers: ['severity="critical"']
+      receiver: ops-webhook
+      group_wait: 10s
+      repeat_interval: 1h
+    # Informational alerts (e.g. NoPredictions) are batched.
+    - matchers: ['severity="info"']
+      receiver: ops-webhook
+      group_wait: 5m
+      repeat_interval: 12h
+
+inhibit_rules:
+  # While the API is down, its latency/error/drift warnings are symptoms, not causes.
+  - source_matchers: ['alertname="APIDown"']
+    target_matchers: ['severity=~"warning|info"']
+
+receivers:
+  - name: ops-webhook
+    webhook_configs:
+      - url: http://alert-receiver:8080/alerts
+        send_resolved: true
