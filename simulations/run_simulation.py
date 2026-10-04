@@ -15,12 +15,22 @@ from simulations.simulator import LPRTrafficSimulator
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="LPR Model Serving Traffic & Drift Simulator")
-    p.add_argument(
-        "-n", "--requests", type=int, default=60, help="Number of prediction requests to send"
+    p = argparse.ArgumentParser(
+        description="LPR Model Serving Traffic & Drift Simulator"
     )
     p.add_argument(
-        "-s", "--scenario", type=str, default="normal", help="Scenario name from config.yaml"
+        "-n",
+        "--requests",
+        type=int,
+        default=60,
+        help="Number of prediction requests to send",
+    )
+    p.add_argument(
+        "-s",
+        "--scenario",
+        type=str,
+        default="normal",
+        help="Scenario name from config.yaml",
     )
     p.add_argument(
         "--rps",
@@ -30,10 +40,15 @@ def parse_args():
     )
     p.add_argument("--concurrency", type=int, default=2, help="Worker threads")
     p.add_argument(
-        "--source", choices=["dataset", "synthetic", "mixed", "noise_images"], default=None
+        "--source",
+        choices=["dataset", "synthetic", "mixed", "noise_images"],
+        default=None,
     )
     p.add_argument(
-        "--pattern", choices=["steady", "burst", "ramp"], default=None, help="Run traffic pattern"
+        "--pattern",
+        choices=["steady", "burst", "ramp"],
+        default=None,
+        help="Run traffic pattern",
     )
     p.add_argument(
         "--bad-requests",
@@ -42,12 +57,18 @@ def parse_args():
         help="Send N malformed requests to test error metrics",
     )
     p.add_argument("--api-url", type=str, default=None, help="Override API base URL")
-    p.add_argument("--config", type=Path, default=None, help="Path to custom config.yaml")
     p.add_argument(
-        "--no-respect-rate-limit", action="store_true", help="Do not sleep on 429 Retry-After"
+        "--config", type=Path, default=None, help="Path to custom config.yaml"
     )
     p.add_argument(
-        "--list-scenarios", action="store_true", help="List available scenarios and exit"
+        "--no-respect-rate-limit",
+        action="store_true",
+        help="Do not sleep on 429 Retry-After",
+    )
+    p.add_argument(
+        "--list-scenarios",
+        action="store_true",
+        help="List available scenarios and exit",
     )
     return p.parse_args()
 

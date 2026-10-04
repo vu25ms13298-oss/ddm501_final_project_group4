@@ -47,12 +47,16 @@ def load_dataset_images(dirs: list[str | Path]) -> list[Sample]:
                 if bgr is None:
                     continue
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-                samples.append(Sample(name=f.name, image=rgb, label=None, is_crop=False))
+                samples.append(
+                    Sample(name=f.name, image=rgb, label=None, is_crop=False)
+                )
     log.info("Loaded %d dataset images", len(samples))
     return samples
 
 
-def build_synthetic_pool(n: int = 40, seed: int = 42, scene_fraction: float = 0.3) -> list[Sample]:
+def build_synthetic_pool(
+    n: int = 40, seed: int = 42, scene_fraction: float = 0.3
+) -> list[Sample]:
     """Builds an in-memory pool of rendered synthetic plates."""
     from scripts.generate_synthetic_plates import (
         degrade,
@@ -116,7 +120,9 @@ def make_non_plate_images(n: int = 20, seed: int = 123) -> list[Sample]:
             base = rng.normal(128, 30, (480, 640, 3))
             img = np.clip(base, 0, 255).astype(np.uint8)
 
-        samples.append(Sample(name=f"non_plate_{i:03d}.png", image=img, label=None, is_crop=False))
+        samples.append(
+            Sample(name=f"non_plate_{i:03d}.png", image=img, label=None, is_crop=False)
+        )
     return samples
 
 

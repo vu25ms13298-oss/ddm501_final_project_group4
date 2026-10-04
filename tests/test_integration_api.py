@@ -328,7 +328,9 @@ class TestModelSource:
 
 
 class TestRateLimiting:
-    def test_rate_limit_exceeded_returns_429_with_retry_after(self, client, monkeypatch):
+    def test_rate_limit_exceeded_returns_429_with_retry_after(
+        self, client, monkeypatch
+    ):
         from api import main as api_main
         import time
 
@@ -348,7 +350,9 @@ class TestRateLimiting:
         api_main._client_request_times["testclient"] = [time.time(), time.time()]
         api_main._client_request_times["127.0.0.1"] = [time.time(), time.time()]
 
-        resp = client.post("/predict", files={"file": ("test.jpg", b"fake", "image/jpeg")})
+        resp = client.post(
+            "/predict", files={"file": ("test.jpg", b"fake", "image/jpeg")}
+        )
         assert resp.status_code == 429
         assert "Rate limit exceeded" in resp.json()["detail"]
         assert "Retry-After" in resp.headers

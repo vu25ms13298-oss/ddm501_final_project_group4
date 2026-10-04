@@ -45,9 +45,13 @@ class LPRTrafficSimulator:
 
         self.api_cfg = self.config.get("api", {})
         self.base_url = self.api_cfg.get("base_url", "http://localhost:8000")
-        self.predict_url = f"{self.base_url}{self.api_cfg.get('predict_path', '/predict')}"
+        self.predict_url = (
+            f"{self.base_url}{self.api_cfg.get('predict_path', '/predict')}"
+        )
         self.health_url = f"{self.base_url}{self.api_cfg.get('health_path', '/health')}"
-        self.prom_url = self.config.get("prometheus", {}).get("url", "http://localhost:9090")
+        self.prom_url = self.config.get("prometheus", {}).get(
+            "url", "http://localhost:9090"
+        )
 
         self.image_source = ImageSource(self.config)
         self.scenarios = self.config.get("scenarios", {})
@@ -74,7 +78,9 @@ class LPRTrafficSimulator:
         try:
             r = requests.get(self.health_url, timeout=5)
             if r.status_code != 200:
-                print(f"{Fore.RED}✗ API health check failed: HTTP {r.status_code}{Style.RESET_ALL}")
+                print(
+                    f"{Fore.RED}✗ API health check failed: HTTP {r.status_code}{Style.RESET_ALL}"
+                )
                 return False
             data = r.json()
             loaded = data.get("model_loaded", False)
@@ -93,7 +99,9 @@ class LPRTrafficSimulator:
             )
             return loaded
         except Exception as exc:
-            print(f"{Fore.RED}✗ Cannot connect to API at {self.health_url}: {exc}{Style.RESET_ALL}")
+            print(
+                f"{Fore.RED}✗ Cannot connect to API at {self.health_url}: {exc}{Style.RESET_ALL}"
+            )
             return False
 
     def send_prediction(
@@ -152,7 +160,9 @@ class LPRTrafficSimulator:
                         .replace(".", "")
                         .upper()
                     )
-                    target_clean = sample.label.replace("-", "").replace(".", "").upper()
+                    target_clean = (
+                        sample.label.replace("-", "").replace(".", "").upper()
+                    )
                     if pred_clean == target_clean:
                         self.stats["exact_matches"] += 1
             elif status_code == 429:
@@ -194,7 +204,9 @@ class LPRTrafficSimulator:
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
             for _ in range(n_requests):
                 sample = self.image_source.sample(src)
-                f = executor.submit(self.send_prediction, sample, transforms, respect_rate_limit)
+                f = executor.submit(
+                    self.send_prediction, sample, transforms, respect_rate_limit
+                )
                 futures.append(f)
                 time.sleep(interval)
                 pbar.update(1)
@@ -215,17 +227,28 @@ class LPRTrafficSimulator:
         if pattern == "burst":
             # Fire rapid burst without pacing to trigger rate limit (429)
             self.run_simulation(
-                n_requests=35, scenario=scenario, rps=8.0, concurrency=4, respect_rate_limit=False
+                n_requests=35,
+                scenario=scenario,
+                rps=8.0,
+                concurrency=4,
+                respect_rate_limit=False,
             )
         elif pattern == "ramp":
             for rps in (0.5, 1.0, 2.0, 4.0):
                 print(f"  Ramping to {rps} RPS...")
                 self.run_simulation(
-                    n_requests=10, scenario=scenario, rps=rps, concurrency=2, show_progress=False
+                    n_requests=10,
+                    scenario=scenario,
+                    rps=rps,
+                    concurrency=2,
+                    show_progress=False,
                 )
         else:
             self.run_simulation(
-                n_requests=int(duration_s * 0.8), scenario=scenario, rps=0.8, concurrency=2
+                n_requests=int(duration_s * 0.8),
+                scenario=scenario,
+                rps=0.8,
+                concurrency=2,
             )
 
     def send_bad_requests(self, n: int = 10):
@@ -241,7 +264,13 @@ class LPRTrafficSimulator:
                 files = {"file": ("empty.jpg", b"", "image/jpeg")}
             elif mode == 1:
                 # Corrupted non-image bytes -> 400
-                files = {"file": ("corrupt.jpg", b"NOT_AN_IMAGE_PAYLOAD_12345678", "image/jpeg")}
+                files = {
+                    "file": (
+                        "corrupt.jpg",
+                        b"NOT_AN_IMAGE_PAYLOAD_12345678",
+                        "image/jpeg",
+                    )
+                }
             else:
                 # Oversized > 10MB -> 413
                 files = {"file": ("huge.jpg", b"0" * (11 * 1024 * 1024), "image/jpeg")}
@@ -259,7 +288,8 @@ class LPRTrafficSimulator:
                 "sum(rate(plate_recognition_result_total[5m]))"
             ),
             "brightness_mean_5m": (
-                "rate(input_image_brightness_sum[5m]) / " "rate(input_image_brightness_count[5m])"
+                "rate(input_image_brightness_sum[5m]) / "
+                "rate(input_image_brightness_count[5m])"
             ),
             "width_mean_5m": (
                 "rate(input_image_width_pixels_sum[5m]) / "
@@ -270,7 +300,9 @@ class LPRTrafficSimulator:
         res = {}
         for k, q in queries.items():
             try:
-                r = requests.get(f"{self.prom_url}/api/v1/query", params={"query": q}, timeout=3)
+                r = requests.get(
+                    f"{self.prom_url}/api/v1/query", params={"query": q}, timeout=3
+                )
                 if r.status_code == 200:
                     data = r.json().get("data", {}).get("result", [])
                     if data:
@@ -305,7 +337,9 @@ class LPRTrafficSimulator:
         color_429 = Fore.YELLOW if s["rate_limited_429"] else Fore.WHITE
         color_4xx = Fore.YELLOW if s["error_4xx"] else Fore.WHITE
         color_5xx = Fore.RED if s["error_5xx"] else Fore.WHITE
-        print(f"Rate Limited (429) : {color_429}{s['rate_limited_429']}{Style.RESET_ALL}")
+        print(
+            f"Rate Limited (429) : {color_429}{s['rate_limited_429']}{Style.RESET_ALL}"
+        )
         print(f"Client Errors (4xx): {color_4xx}{s['error_4xx']}{Style.RESET_ALL}")
         print(f"Server Errors (5xx): {color_5xx}{s['error_5xx']}{Style.RESET_ALL}")
         print(f"Latency P50 / P95  : {p50} ms / {p95} ms")

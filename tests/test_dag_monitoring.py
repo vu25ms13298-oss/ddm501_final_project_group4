@@ -16,7 +16,10 @@ def test_parse_prom_value():
     empty = {"status": "success", "data": {"result": []}}
     assert parse_prom_value(empty) is None
 
-    nan_val = {"status": "success", "data": {"result": [{"value": [1600000000, "NaN"]}]}}
+    nan_val = {
+        "status": "success",
+        "data": {"result": [{"value": [1600000000, "NaN"]}]},
+    }
     assert parse_prom_value(nan_val) is None
 
     err = {"status": "error"}

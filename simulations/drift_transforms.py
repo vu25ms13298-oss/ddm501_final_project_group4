@@ -100,7 +100,9 @@ def apply_pipeline(
     for spec in specs:
         name = spec.get("name")
         if name not in TRANSFORMS:
-            raise ValueError(f"Unknown transform: '{name}'. Available: {list(TRANSFORMS.keys())}")
+            raise ValueError(
+                f"Unknown transform: '{name}'. Available: {list(TRANSFORMS.keys())}"
+            )
         fn = TRANSFORMS[name]
         params = {k: v for k, v in spec.items() if k != "name"}
         cur = fn(cur, rng=rng, **params)

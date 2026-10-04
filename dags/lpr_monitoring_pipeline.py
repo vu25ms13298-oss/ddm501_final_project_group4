@@ -41,7 +41,11 @@ LPR_API_URL = os.getenv("LPR_API_URL", "http://api:8000")
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 MONITORING_SCHEDULE = os.getenv("MONITORING_SCHEDULE", "*/15 * * * *")
-AUTO_RETRAIN_ON_DRIFT = os.getenv("AUTO_RETRAIN_ON_DRIFT", "false").lower() in ("true", "1", "yes")
+AUTO_RETRAIN_ON_DRIFT = os.getenv("AUTO_RETRAIN_ON_DRIFT", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 REPORTS_DIR = PROJECT / "data" / "monitoring_reports"
 
@@ -72,7 +76,9 @@ def lpr_monitoring_pipeline():
         except Exception as exc:
             raise AirflowFailException(f"API /health unreachable: {exc}") from exc
 
-        if health_data.get("status") != "healthy" or not health_data.get("model_loaded"):
+        if health_data.get("status") != "healthy" or not health_data.get(
+            "model_loaded"
+        ):
             raise AirflowFailException(f"API reported unhealthy status: {health_data}")
 
         try:
@@ -101,7 +107,9 @@ def lpr_monitoring_pipeline():
         try:
             mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
             client = mlflow.MlflowClient()
-            model_info = client.get_model_version_by_alias("lpr-ocr-classifier", "production")
+            model_info = client.get_model_version_by_alias(
+                "lpr-ocr-classifier", "production"
+            )
             registry_version = str(model_info.version)
         except Exception as exc:
             log.info("No active @production model in MLflow registry: %s", exc)
@@ -143,7 +151,9 @@ def lpr_monitoring_pipeline():
         try:
             files = {"file": (filename, image_bytes, "image/png")}
             data = {"assume_plate_crop": "false"}
-            resp = requests.post(f"{LPR_API_URL}/predict", files=files, data=data, timeout=15)
+            resp = requests.post(
+                f"{LPR_API_URL}/predict", files=files, data=data, timeout=15
+            )
             if resp.status_code == 429:
                 log.warning("Canary prediction skipped due to rate limit (429)")
                 return {"status": "rate_limited", "detail": "HTTP 429"}
@@ -225,7 +235,9 @@ def lpr_monitoring_pipeline():
     def branch_on_drift(eval_result: dict) -> str:
         """Branches to trigger retraining if drift is detected and auto-retrain is active."""
         if eval_result.get("drift_detected") and AUTO_RETRAIN_ON_DRIFT:
-            log.warning("Drift detected and AUTO_RETRAIN_ON_DRIFT=true -> trigger_retraining")
+            log.warning(
+                "Drift detected and AUTO_RETRAIN_ON_DRIFT=true -> trigger_retraining"
+            )
             return "trigger_retraining"
         return "no_action"
 
