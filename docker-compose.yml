@@ -336,7 +336,8 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
       interval: 30s
-      timeout: 15s
+      # The Airflow CLI alone takes 10-20 s to start, longer while tasks run.
+      timeout: 60s
       retries: 5
       start_period: 60s
     restart: unless-stopped
