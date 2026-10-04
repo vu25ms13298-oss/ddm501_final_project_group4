@@ -108,11 +108,13 @@ The system is deployed as a REST API with full MLOps infrastructure: experiment 
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.10+ (for local development)
-- Git
+- Git and **[Git LFS](https://git-lfs.com)** — model binaries (`models/**/*.pkl`,
+  `*.joblib`, `*.pt`) are stored in LFS, see `.gitattributes`
 
 ### 1. Clone and Start Services
 
 ```bash
+git lfs install        # once per machine, before cloning
 git clone https://github.com/vu25ms13298-oss/ddm501_final_project_group4.git
 cd ddm501_final_project_group4
 cp .env.example .env   # optional: set API_ADMIN_TOKEN to enable /model/reload
@@ -359,10 +361,47 @@ python scenarios.py 6   # Traffic Spike (triggers HTTP 429 rate limit)
 
 Observe live Grafana dashboards (`http://localhost:3000`) and Prometheus alert states (`http://localhost:9090/alerts`) as scenarios execute.
 
-## End-to-End Benchmark
+## Evaluation on Real Images
 
+`dataset/` contains a 50-image sample (35 train + 15 val) of the real detection
+dataset. Plate text has so far been labelled manually for the first 10 images in
+`dataset/plate_text_labels.csv`; `Dieu_0009` is excluded because its three plates
+are 26–30 px wide and unreadable. Evaluated: **9 images, 6 distinct vehicles**,
+all 2-line plates (white, yellow and blue). The other 40 images still need text
+labels.
 
-Real labelled plate images are not committed (the Roboflow detection dataset is
+```bash
+# Mode 1 — full scene: YOLO detection + OCR (real usage)
+python scripts/evaluate_lpr_end_to_end.py --manifest dataset/plate_text_labels.csv \
+  --output results/real_eval_scene.csv
+# Mode 2 — OCR only on ground-truth plate crops (from the YOLO polygon labels)
+python scripts/crop_plates_from_labels.py
+python scripts/evaluate_lpr_end_to_end.py --manifest results/real_plate_crops/manifest.csv \
+  --output results/real_eval_crops.csv
+```
+
+| Mode | Exact plate | Char accuracy |
+|---|---|---|
+| Full scene (YOLO + OCR) | **4/9 (44.4%)** | 67.1% |
+| Ground-truth crops (OCR only) | 2/9 (22.2%) | 61.8% |
+
+Findings:
+- YOLO located the correct plate in every failure that was inspected; errors come
+  from character segmentation/OCR.
+- **Blue plates (white text on blue)** fail completely (`Dieu_0001`, `Dieu_0002`):
+  segmentation and the synthetic training data assume dark text on a light plate.
+- Other errors are single-character confusions (1→4, 1→0, 7→1) and extra/missing
+  characters, e.g. the hyphen in motorbike plates (`62-H7`).
+- OCR is tuned to the pipeline's own YOLO crop + rectification; tight ground-truth
+  crops score lower, so mode 2 is not a cleaner OCR-only estimate here.
+- The real-image result (44%) is far below the synthetic benchmark (85%) and below
+  the 70% business target. With only 9 images (95% CI ≈ 19–73%) it is indicative,
+  not conclusive. Next steps: label more real plates, add inverted-polarity (blue
+  plate) handling and fine-tune OCR on real character crops.
+
+## End-to-End Benchmark (synthetic)
+
+Only a 50-image real sample is committed (the full Roboflow detection dataset is
 referenced in `dataset/data.yaml`). For a reproducible end-to-end regression check,
 the repo generates labelled synthetic plates (1-line and 2-line, crops and scenes):
 
@@ -400,7 +439,7 @@ pytest tests/ --cov=src --cov=api --cov-report=term-missing
 docker compose run --rm -v "$PWD:/app" trainer pytest tests/ --cov=src --cov=api
 ```
 
-Current result: 102 tests, 80.8% line coverage (`src/` + `api/`). Uncovered code is
+Current result: 110 tests, 80.5% line coverage (`src/` + `api/`). Uncovered code is
 mostly the optional ResNet18/YOLO-training paths that need torch, which CI does
 not install.
 
@@ -447,7 +486,9 @@ pytest tests/ -v
 
 **API returns 503**: The model files are not found. Ensure `models/ocr_hog_svm/` contains `svm_classifier.pkl`, `feature_scaler.pkl` and `metadata.json` (or promote a model to `@production` in MLflow).
 
-**`yolo_loaded: false`**: YOLO weights are not committed to the repo. Put `best.pt` at `models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt` (mounted read-only into the API container) and run `docker compose restart api`. Without weights the API uses the contour-based fallback detector.
+**"… is a Git LFS pointer, not the model file"** (or `models/**/*.pkl` / `best.pt` are ~130-byte text files): the repo was cloned without Git LFS. Run `git lfs install && git lfs pull`, then `docker compose up -d --build api`.
+
+**`yolo_loaded: false`**: `models/yolo_runs/license_plate_yolov8_bbox/weights/best.pt` is missing or still an LFS pointer (see above). The directory is mounted read-only into the API container; after fixing it run `docker compose restart api`. Without weights the API uses the contour-based fallback detector.
 
 **Synthetic data looks wrong / RuntimeWarning about fonts**: the character generator needs TrueType fonts. Install `fonts-dejavu-core` (already included in the trainer and Airflow images).
 

@@ -7,4 +7,4 @@ names: ['BSD', 'BSV']
 
 # BSD = Bien So Dai (bien 1 dong, hinh chu nhat ngang, AR > 2.5)
 # BSV = Bien So Vuong (bien 2 dong, hinh vuong, AR <= 2.5)
-# Sample: 10 images (7 train + 3 val) from full dataset (3433 train + 1145 val)
+# Sample: 50 images (35 train + 15 val) from full dataset (3433 train + 1145 val)

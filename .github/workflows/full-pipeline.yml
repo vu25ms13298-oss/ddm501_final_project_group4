@@ -28,6 +28,7 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/lfs-pull
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
@@ -56,6 +57,7 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/lfs-pull
       - run: docker compose config --quiet
       - run: docker build -f mlflow/Dockerfile -t lpr-mlflow:test .
       - run: docker build -f api/Dockerfile -t lpr-api:test .
@@ -67,6 +69,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/lfs-pull
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:

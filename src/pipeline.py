@@ -71,6 +71,24 @@ DIGIT_TO_LETTER = {
 }
 
 
+LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/"
+
+
+def ensure_not_lfs_pointer(path):
+    """Fails fast when a model file is a Git LFS pointer instead of the model.
+
+    Cloning without git-lfs leaves ~130-byte text pointers in models/, which
+    joblib/torch would reject with a cryptic "invalid load key" error.
+    """
+    with open(path, "rb") as f:
+        head = f.read(len(LFS_POINTER_PREFIX))
+    if head == LFS_POINTER_PREFIX:
+        raise RuntimeError(
+            f"{path} is a Git LFS pointer, not the model file. "
+            "Install git-lfs and run `git lfs install && git lfs pull`."
+        )
+
+
 def _resize_plate_for_ocr(plate_crop, target_width=400):
     h, w = plate_crop.shape[:2]
     if w <= 0 or h <= 0 or w == target_width:
@@ -181,6 +199,8 @@ class LPRPipeline:
             metadata_path = os.path.join(models_dir, "char_classes.json")
 
         if os.path.exists(classifier_path) and os.path.exists(scaler_path):
+            ensure_not_lfs_pointer(classifier_path)
+            ensure_not_lfs_pointer(scaler_path)
             metadata = {}
             if os.path.exists(metadata_path):
                 with open(metadata_path, "r", encoding="utf-8") as f:
@@ -224,6 +244,7 @@ class LPRPipeline:
         if YOLO is None:
             print("ultralytics not installed; YOLO detection disabled")
             return
+        ensure_not_lfs_pointer(yolo_model_path)
         self.yolo_model = YOLO(yolo_model_path)
         self.yolo_model_path = yolo_model_path
         print(f"Loaded YOLO model: {yolo_model_path}")

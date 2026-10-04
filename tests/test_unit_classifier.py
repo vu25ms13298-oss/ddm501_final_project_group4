@@ -89,3 +89,31 @@ class TestPipelineMetadataGuard:
         p = LPRPipeline()
         p.set_ocr_model(model, scaler, {"feature_method": "hog"})
         assert p.feature_method == "hog_legacy"
+
+
+class TestLfsPointerGuard:
+    POINTER = (
+        b"version https://git-lfs.github.com/spec/v1\n"
+        b"oid sha256:ed21524918\nsize 36934351\n"
+    )
+
+    def test_pointer_file_raises_clear_error(self, tmp_path):
+        from src.pipeline import ensure_not_lfs_pointer
+
+        pointer = tmp_path / "svm_classifier.pkl"
+        pointer.write_bytes(self.POINTER)
+        with pytest.raises(RuntimeError, match="git lfs pull"):
+            ensure_not_lfs_pointer(pointer)
+
+    def test_real_file_passes(self, tmp_path):
+        from src.pipeline import ensure_not_lfs_pointer
+
+        real = tmp_path / "model.pkl"
+        real.write_bytes(b"\x80\x04real pickle bytes")
+        ensure_not_lfs_pointer(real)
+
+    def test_pipeline_refuses_pointer_models(self, tmp_path):
+        (tmp_path / "svm_classifier.pkl").write_bytes(self.POINTER)
+        (tmp_path / "feature_scaler.pkl").write_bytes(self.POINTER)
+        with pytest.raises(RuntimeError, match="Git LFS pointer"):
+            LPRPipeline(models_dir=str(tmp_path))
