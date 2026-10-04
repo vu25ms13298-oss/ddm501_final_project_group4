@@ -5,12 +5,13 @@ import os
 import secrets
 import sys
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import (
     Counter,
@@ -19,7 +20,7 @@ from prometheus_client import (
     generate_latest,
     CONTENT_TYPE_LATEST,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, Response
 
@@ -148,7 +149,7 @@ def _load_ocr_into(p: LPRPipeline) -> tuple[str, str | None]:
 WARM_UP_IMAGE_SHAPE = (480, 640, 3)
 
 
-def _warm_up(p: LPRPipeline):
+def _warm_up(p: LPRPipeline) -> None:
     """Runs one throw-away inference so lazy initialisation (YOLO/torch graph,
     first sklearn call) happens before real traffic instead of on the first
     request, which otherwise took 5-10 s. Not recorded in the metrics."""
@@ -167,7 +168,7 @@ def _warm_up(p: LPRPipeline):
     logger.info("Warm-up inference done in %.2fs", time.time() - t0)
 
 
-def load_pipeline():
+def load_pipeline() -> LPRPipeline:
     global model_source, model_version
     p = LPRPipeline()
     source, version = _load_ocr_into(p)
@@ -192,7 +193,7 @@ def load_pipeline():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global pipeline
     try:
         pipeline = await run_in_threadpool(load_pipeline)
@@ -226,7 +227,9 @@ MAX_REQUESTS_PER_WINDOW = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60"))
 
 
 @app.middleware("http")
-async def track_requests(request, call_next):
+async def track_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """Single place where every HTTP request is counted, timed, and rate-limited."""
     endpoint = request.url.path
     if endpoint.startswith("/predict"):
@@ -270,26 +273,81 @@ async def track_requests(request, call_next):
 # Pydantic models
 # ---------------------------------------------------------------------------
 class PredictionResponse(BaseModel):
-    success: bool
-    plate_text: str | None = None
-    raw_text: str | None = None
-    plate_type: str | None = None
-    char_count: int = 0
-    detection_confidence: float | None = None
-    format_score: float = 0.0
-    latency_ms: float = 0.0
-    timestamp: str = ""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "success": True,
+                    "plate_text": "62A25781",
+                    "raw_text": "62A25781",
+                    "plate_type": "2line",
+                    "char_count": 8,
+                    "detection_confidence": 0.85,
+                    "format_score": 15.0,
+                    "latency_ms": 433.27,
+                    "timestamp": "2026-10-04T09:30:00+00:00",
+                }
+            ]
+        }
+    )
+
+    success: bool = Field(
+        description="True when the text matches a valid Vietnamese plate format"
+    )
+    plate_text: str | None = Field(
+        default=None, description="Plate text after format correction"
+    )
+    raw_text: str | None = Field(
+        default=None, description="Plate text before format correction"
+    )
+    plate_type: str | None = Field(
+        default=None, description="'1line', '2line' or 'unknown'"
+    )
+    char_count: int = Field(default=0, description="Number of segmented characters")
+    detection_confidence: float | None = Field(
+        default=None, description="Plate detector confidence (0-1)"
+    )
+    format_score: float = Field(
+        default=0.0, description="How well the text fits plate grammar"
+    )
+    latency_ms: float = Field(default=0.0, description="Inference time in ms")
+    timestamp: str = Field(default="", description="UTC time of the prediction")
 
 
 class Base64PredictRequest(BaseModel):
-    image: str | None = None
-    assume_plate_crop: bool = False
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"image": "iVBORw0KGgoAAAANSUhEUgAA...", "assume_plate_crop": False}
+            ]
+        }
+    )
+
+    image: str | None = Field(
+        default=None, description="Base64-encoded JPEG or PNG (max MAX_UPLOAD_MB)"
+    )
+    assume_plate_crop: bool = Field(
+        default=False, description="True if the image is already a tight plate crop"
+    )
 
 
 class HealthResponse(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "healthy",
+                    "model_loaded": True,
+                    "feature_method": "hog",
+                    "classifier": "svm",
+                    "uptime_seconds": 3600.5,
+                }
+            ]
+        },
+    )
 
-    status: str
+    status: str = Field(description="'healthy' or 'degraded' (no model loaded)")
     model_loaded: bool
     feature_method: str | None = None
     classifier: str | None = None
@@ -297,16 +355,80 @@ class HealthResponse(BaseModel):
 
 
 class ModelInfoResponse(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "examples": [
+                {
+                    "model_name": "lpr_pipeline",
+                    "feature_method": "hog",
+                    "classifier": "svm",
+                    "char_classes": list("0123456789ABCDEFGHKLMNPRSTUVXYZ"),
+                    "feature_dim": 1764,
+                    "yolo_loaded": True,
+                    "model_source": "mlflow",
+                    "model_version": "2",
+                }
+            ]
+        },
+    )
 
     model_name: str
     feature_method: str
     classifier: str
     char_classes: list[str]
-    feature_dim: int | None = None
-    yolo_loaded: bool
+    feature_dim: int | None = Field(default=None, description="Feature vector size")
+    yolo_loaded: bool = Field(description="False means contour fallback detection")
+    model_source: str = Field(description="'mlflow' (registry), 'local' or 'none'")
+    model_version: str | None = Field(
+        default=None, description="Registry version when model_source is 'mlflow'"
+    )
+
+
+class ReloadResponse(BaseModel):
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "reloaded",
+                    "feature_method": "hog",
+                    "model_source": "mlflow",
+                    "model_version": "2",
+                }
+            ]
+        },
+    )
+
+    status: str
+    feature_method: str
     model_source: str
     model_version: str | None = None
+
+
+class ServiceInfo(BaseModel):
+    service: str
+    version: str
+    docs: str
+    health: str
+
+
+class ErrorResponse(BaseModel):
+    detail: str = Field(description="Human-readable error message")
+
+
+def _errors(*codes: int) -> dict:
+    """OpenAPI ``responses`` entries for the given error status codes."""
+    meaning = {
+        400: "Empty, undecodable or invalid image",
+        401: "Missing or wrong X-Admin-Token",
+        403: "Model reload disabled (API_ADMIN_TOKEN not set)",
+        413: "Image larger than MAX_UPLOAD_MB",
+        429: "Rate limit exceeded; see the Retry-After header",
+        500: "Inference or reload failed (details are logged server-side)",
+        503: "No model loaded",
+    }
+    return {c: {"model": ErrorResponse, "description": meaning[c]} for c in codes}
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +443,7 @@ def _decode_image(data: bytes) -> np.ndarray:
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 
-def _check_size(n_bytes: int):
+def _check_size(n_bytes: int) -> None:
     if n_bytes > MAX_UPLOAD_BYTES:
         PREDICTION_ERRORS.labels(error_type="payload_too_large").inc()
         raise HTTPException(
@@ -330,13 +452,15 @@ def _check_size(n_bytes: int):
         )
 
 
-def _observe_input(image_rgb: np.ndarray):
+def _observe_input(image_rgb: np.ndarray) -> None:
     gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     INPUT_BRIGHTNESS.observe(float(gray.mean()))
     INPUT_WIDTH.observe(image_rgb.shape[1])
 
 
-async def _predict(image_rgb: np.ndarray, assume_plate_crop: bool):
+async def _predict(
+    image_rgb: np.ndarray, assume_plate_crop: bool
+) -> PredictionResponse:
     """Runs inference off the event loop and records model metrics."""
     if pipeline is None or pipeline.svm_model is None:
         PREDICTION_ERRORS.labels(error_type="model_not_loaded").inc()
@@ -388,8 +512,8 @@ async def _predict(image_rgb: np.ndarray, assume_plate_crop: bool):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
-@app.get("/", tags=["General"])
-async def root():
+@app.get("/", response_model=ServiceInfo, tags=["General"], summary="Service info")
+async def root() -> dict:
     return {
         "service": "License Plate Recognition API",
         "version": app.version,
@@ -398,8 +522,13 @@ async def root():
     }
 
 
-@app.get("/health", response_model=HealthResponse, tags=["General"])
-async def health():
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["General"],
+    summary="Liveness and model status",
+)
+async def health() -> HealthResponse:
     loaded = pipeline is not None and pipeline.svm_model is not None
     return HealthResponse(
         status="healthy" if loaded else "degraded",
@@ -410,8 +539,14 @@ async def health():
     )
 
 
-@app.get("/model/info", response_model=ModelInfoResponse, tags=["Model"])
-async def model_info():
+@app.get(
+    "/model/info",
+    response_model=ModelInfoResponse,
+    tags=["Model"],
+    summary="Model currently served (source and registry version)",
+    responses=_errors(503),
+)
+async def model_info() -> ModelInfoResponse:
     if pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     return ModelInfoResponse(
@@ -426,11 +561,23 @@ async def model_info():
     )
 
 
-@app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
+@app.post(
+    "/predict",
+    response_model=PredictionResponse,
+    tags=["Prediction"],
+    summary="Recognise the plate in an uploaded image",
+    description=(
+        "Multipart upload. Send `assume_plate_crop=true` when the image is already "
+        "a tight plate crop to skip detection. Rate limited per client IP."
+    ),
+    responses=_errors(400, 413, 429, 500, 503),
+)
 async def predict(
     file: UploadFile = File(..., description="Image file (JPEG/PNG)"),
-    assume_plate_crop: bool = Form(False),
-):
+    assume_plate_crop: bool = Form(
+        False, description="True if the image is already a plate crop"
+    ),
+) -> PredictionResponse:
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if not contents:
         PREDICTION_ERRORS.labels(error_type="empty_file").inc()
@@ -439,8 +586,14 @@ async def predict(
     return await _predict(_decode_image(contents), assume_plate_crop)
 
 
-@app.post("/predict/base64", response_model=PredictionResponse, tags=["Prediction"])
-async def predict_base64(payload: Base64PredictRequest):
+@app.post(
+    "/predict/base64",
+    response_model=PredictionResponse,
+    tags=["Prediction"],
+    summary="Recognise the plate in a base64-encoded image",
+    responses=_errors(400, 413, 429, 500, 503),
+)
+async def predict_base64(payload: Base64PredictRequest) -> PredictionResponse:
     if not payload.image:
         raise HTTPException(status_code=400, detail="Missing 'image' field (base64)")
     # base64 inflates size by 4/3; reject before decoding.
@@ -453,8 +606,17 @@ async def predict_base64(payload: Base64PredictRequest):
     return await _predict(_decode_image(image_bytes), payload.assume_plate_crop)
 
 
-@app.post("/model/reload", tags=["Model"])
-async def reload_model(x_admin_token: str | None = Header(default=None)):
+@app.post(
+    "/model/reload",
+    response_model=ReloadResponse,
+    tags=["Model"],
+    summary="Hot-reload the model (MLflow @production or baked-in)",
+    description="Requires the `X-Admin-Token` header. No restart, no downtime.",
+    responses=_errors(401, 403, 500),
+)
+async def reload_model(
+    x_admin_token: str | None = Header(default=None, description="Admin token"),
+) -> dict:
     if not API_ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Model reload is disabled")
     if not x_admin_token or not secrets.compare_digest(x_admin_token, API_ADMIN_TOKEN):
@@ -475,6 +637,6 @@ async def reload_model(x_admin_token: str | None = Header(default=None)):
     }
 
 
-@app.get("/metrics", tags=["Monitoring"])
-async def metrics():
+@app.get("/metrics", tags=["Monitoring"], summary="Prometheus metrics")
+async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
