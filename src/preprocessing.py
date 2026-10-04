@@ -7,6 +7,9 @@
 #   3. Deskew via MinAreaRect angle estimation
 #   4. 180° rotational ambiguity resolution (max valid char count)
 
+from __future__ import annotations
+
+from typing import Any
 import cv2
 import numpy as np
 
@@ -16,7 +19,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 
-def preprocess_scene_image(image):
+def preprocess_scene_image(image: np.ndarray) -> np.ndarray:
     """
     Preprocess raw scene image before plate detection.
 
@@ -59,7 +62,7 @@ def preprocess_scene_image(image):
     return cv2.LUT(denoised, table)
 
 
-def enhance_plate_crop_for_ocr(plate_img):
+def enhance_plate_crop_for_ocr(plate_img: np.ndarray) -> np.ndarray:
     """
     Enhance an already-cropped plate before binarization/OCR.
 
@@ -90,7 +93,9 @@ def enhance_plate_crop_for_ocr(plate_img):
 # ---------------------------------------------------------------------------
 
 
-def rotate_bound(image, angle, border_mode=cv2.BORDER_REPLICATE):
+def rotate_bound(
+    image: np.ndarray, angle: float, border_mode: int = cv2.BORDER_REPLICATE
+) -> np.ndarray:
     """
     Rotate an image without clipping its corners.
     """
@@ -112,7 +117,7 @@ def rotate_bound(image, angle, border_mode=cv2.BORDER_REPLICATE):
     )
 
 
-def estimate_plate_skew_angle(plate_img):
+def estimate_plate_skew_angle(plate_img: np.ndarray) -> float:
     """
     Estimate the dominant text/plate horizontal angle in degrees.
 
@@ -184,7 +189,9 @@ def estimate_plate_skew_angle(plate_img):
     return -angle if abs(angle) <= 35 else 0.0
 
 
-def crop_plate_body_after_deskew(plate_img, margin=0.04):
+def crop_plate_body_after_deskew(
+    plate_img: np.ndarray, margin: float = 0.04
+) -> np.ndarray:
     """
     Crop away the padded scene background created by rotate_bound.
 
@@ -203,7 +210,12 @@ def crop_plate_body_after_deskew(plate_img, margin=0.04):
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     image_area = h * w
 
-    def find_best(binary, min_area_ratio, ar_range=(0.75, 6.5), penalize_border=True):
+    def find_best(
+        binary: np.ndarray,
+        min_area_ratio: float,
+        ar_range: tuple[float, float] = (0.75, 6.5),
+        penalize_border: bool = True,
+    ) -> tuple[int, int, int, int] | None:
         contours, _ = cv2.findContours(
             binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -273,7 +285,7 @@ def _order_quad_points(points):
     )
 
 
-def rectify_plate_crop(plate_img):
+def rectify_plate_crop(plate_img: np.ndarray) -> np.ndarray:
     """
     Perspective-warp the plate inside a YOLO bbox when a reliable quadrilateral
     border is visible. Falls back to the original crop if detection is unsure.
@@ -334,7 +346,7 @@ def rectify_plate_crop(plate_img):
     )
 
 
-def deskew_plate(plate_img):
+def deskew_plate(plate_img: np.ndarray) -> np.ndarray:
     """
     Correct the rotation of a cropped plate image using MinAreaRect on binary
     foreground pixels.  Handles angles in the range [-45°, 45°].
@@ -349,7 +361,7 @@ def deskew_plate(plate_img):
     return deskewed
 
 
-def deskew_plate_with_angle(plate_img):
+def deskew_plate_with_angle(plate_img: np.ndarray) -> tuple[np.ndarray, float]:
     """
     Deskew and return the applied rotation angle in degrees.
     """
@@ -396,7 +408,9 @@ def _count_valid_chars(plate_img):
     return count
 
 
-def deskew_with_fallback(plate_img, svm_model=None, scaler=None):
+def deskew_with_fallback(
+    plate_img: np.ndarray, svm_model: Any = None, scaler: Any = None
+) -> np.ndarray:
     """
     Deskew a plate crop without resolving 180-degree orientation.
 
@@ -442,7 +456,9 @@ def _two_line_char_counts(plate_img):
         return None
 
 
-def orient_plate_vn(plate_img, return_was_rotated=False):
+def orient_plate_vn(
+    plate_img: np.ndarray, return_was_rotated: bool = False
+) -> np.ndarray | tuple[np.ndarray, bool]:
     """
     Resolve 180-degree orientation for common Vietnamese two-line plates.
 

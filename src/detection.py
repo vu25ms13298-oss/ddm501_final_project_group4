@@ -4,6 +4,10 @@
 # This module implements license plate detection using YOLOv8,
 # with a contour-based fallback algorithm for demo/fallback purposes.
 
+from __future__ import annotations
+
+from typing import Any
+import numpy as np
 import cv2
 
 try:
@@ -16,7 +20,9 @@ except ImportError:
 
 # ============= YOLOv8 Training Template =============
 # Chạy khi có dataset từ Member 1 (data.yaml)
-def train_yolo(data_yaml_path, epochs=50, device=None):
+def train_yolo(
+    data_yaml_path: str, epochs: int = 50, device: int | str | None = None
+) -> str:
     """
     Train YOLOv8 on Vietnam license plate dataset.
 
@@ -52,7 +58,9 @@ def train_yolo(data_yaml_path, epochs=50, device=None):
 # ============= Inference Functions =============
 
 
-def detect_plate_yolo(image, model, conf_threshold=0.25):
+def detect_plate_yolo(
+    image: np.ndarray, model: Any, conf_threshold: float = 0.25
+) -> list[tuple[int, int, int, int, float]]:
     """
     Detect biển số trong ảnh bằng YOLO.
 
@@ -76,7 +84,9 @@ def detect_plate_yolo(image, model, conf_threshold=0.25):
     return boxes
 
 
-def detect_plate_contour_fallback(image):
+def detect_plate_contour_fallback(
+    image: np.ndarray,
+) -> list[tuple[int, int, int, int, float]]:
     """
     Fallback method: dùng contour detection khi không có YOLO model train riêng.
     Tìm các vùng hình chữ nhật có aspect ratio phù hợp với biển số Việt Nam.

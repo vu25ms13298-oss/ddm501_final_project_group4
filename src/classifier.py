@@ -4,6 +4,9 @@
 # This module implements dataset generation for synthetic characters,
 # training of the SVM classifier on ResNet18 features, and saving of models.
 
+from __future__ import annotations
+
+from typing import Any
 import functools
 import os
 import random
@@ -90,10 +93,8 @@ def _degrade_char_image(arr):
 
 
 def generate_plate_style_synthetic_chars(
-    char_classes=CHAR_CLASSES,
-    samples_per_class=160,
-    img_size=96,
-):
+    char_classes: str = CHAR_CLASSES, samples_per_class: int = 160, img_size: int = 96
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate character crops that better resemble segmented license-plate glyphs.
 
@@ -165,8 +166,8 @@ def generate_plate_style_synthetic_chars(
 
 
 def generate_synthetic_chars(
-    char_classes=CHAR_CLASSES, samples_per_class=80, img_size=64
-):
+    char_classes: str = CHAR_CLASSES, samples_per_class: int = 80, img_size: int = 64
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Sinh dataset ký tự synthetic với augmentation.
 
@@ -230,7 +231,9 @@ def generate_synthetic_chars(
     return np.array(images), np.array(labels)
 
 
-def train_svm(X_train, y_train, seed=42):
+def train_svm(
+    X_train: np.ndarray, y_train: np.ndarray, seed: int = 42
+) -> tuple[SVC, StandardScaler]:
     """
     Train SVM (RBF kernel) classifier on scaled features.
 
@@ -252,14 +255,14 @@ def train_svm(X_train, y_train, seed=42):
 
 
 def save_models(
-    svm_model,
-    scaler,
-    save_dir,
-    feature_method="resnet",
-    classifier_name="svm",
-    metrics=None,
-    feature_dim=None,
-):
+    svm_model: Any,
+    scaler: StandardScaler,
+    save_dir: str | os.PathLike,
+    feature_method: str = "resnet",
+    classifier_name: str = "svm",
+    metrics: dict | None = None,
+    feature_dim: int | None = None,
+) -> None:
     """
     Lưu models để Member 4 sử dụng tích hợp.
 

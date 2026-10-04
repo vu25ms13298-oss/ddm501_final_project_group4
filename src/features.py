@@ -4,6 +4,10 @@
 # This module implements feature extraction using a pre-trained ResNet18 model.
 # Image 128x128 (or 32x32 resized to 224x224) -> ResNet18 -> feature vector 1x512.
 
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any
 import numpy as np
 import cv2
 
@@ -21,7 +25,7 @@ class ResNet18FeatureExtractor:
     Wrapper cho ResNet18 pre-trained: bỏ FC layer cuối, output 512-d feature.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         torch, nn, models, _ = _import_torch()
         backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         self.features = nn.Sequential(*list(backbone.children())[:-1])
@@ -34,7 +38,7 @@ class ResNet18FeatureExtractor:
             feat = feat.view(feat.size(0), -1)
         return feat
 
-    def to(self, device):
+    def to(self, device: Any) -> ResNet18FeatureExtractor:
         self.features = self.features.to(device)
         return self
 
@@ -61,7 +65,7 @@ def _get_char_transform():
 _encoder = None
 
 
-def get_encoder():
+def get_encoder() -> ResNet18FeatureExtractor:
     """Lazily loads and returns the global ResNet18 feature extractor model."""
     global _encoder
     if _encoder is None:
@@ -75,7 +79,9 @@ def get_encoder():
     return _encoder
 
 
-def extract_features(char_imgs, batch_size=64, encoder_model=None):
+def extract_features(
+    char_imgs: Sequence[np.ndarray], batch_size: int = 64, encoder_model: Any = None
+) -> np.ndarray:
     """
     Trích xuất feature từ list các ảnh ký tự.
 
@@ -110,7 +116,7 @@ def extract_features(char_imgs, batch_size=64, encoder_model=None):
 # ===========================================================================
 
 
-def extract_raw_features(char_imgs):
+def extract_raw_features(char_imgs: Sequence[np.ndarray]) -> np.ndarray:
     """
     Raw pixel baseline: flatten each 32×32 char image → 1024-d vector, normalised [0,1].
 
@@ -130,8 +136,11 @@ def extract_raw_features(char_imgs):
 
 
 def extract_hog_features(
-    char_imgs, pixels_per_cell=(4, 4), cells_per_block=(2, 2), orientations=9
-):
+    char_imgs: Sequence[np.ndarray],
+    pixels_per_cell: tuple[int, int] = (4, 4),
+    cells_per_block: tuple[int, int] = (2, 2),
+    orientations: int = 9,
+) -> np.ndarray:
     """
     Histogram of Oriented Gradients (HOG) features for character images.
     Default config follows LPR_Report.pdf on 32×32: 1764-d HOG vector.
@@ -168,7 +177,7 @@ def extract_hog_features(
     return np.array(out, dtype=np.float32)
 
 
-def extract_hog_legacy_features(char_imgs):
+def extract_hog_legacy_features(char_imgs: Sequence[np.ndarray]) -> np.ndarray:
     """
     Legacy HOG config used by older saved models: 32x32 with 8x8 cells -> 324-d.
     """
@@ -180,7 +189,9 @@ def extract_hog_legacy_features(char_imgs):
     )
 
 
-def extract_wavelet_features(char_imgs, wavelet="haar", level=2):
+def extract_wavelet_features(
+    char_imgs: Sequence[np.ndarray], wavelet: str = "haar", level: int = 2
+) -> np.ndarray:
     """
     Haar Wavelet decomposition features for 32×32 images.
 

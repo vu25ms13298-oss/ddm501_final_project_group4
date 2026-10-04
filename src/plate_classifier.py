@@ -4,7 +4,14 @@
 # This module classifies license plates based on aspect ratio (AR) of width / height.
 
 
-def classify_plate_type(plate_img, threshold=2.5):
+from __future__ import annotations
+
+import numpy as np
+
+
+def classify_plate_type(
+    plate_img: np.ndarray, threshold: float = 2.5
+) -> tuple[str, float]:
     """
     Phân loại loại biển số dựa trên aspect ratio.
 

@@ -5,6 +5,9 @@
 # that executes preprocessing, detection, type classification, character segmentation,
 # feature extraction, and character classification.
 
+from __future__ import annotations
+
+from typing import Any
 import cv2
 import json
 import os
@@ -74,7 +77,7 @@ DIGIT_TO_LETTER = {
 LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/"
 
 
-def ensure_not_lfs_pointer(path):
+def ensure_not_lfs_pointer(path: str | os.PathLike) -> None:
     """Fails fast when a model file is a Git LFS pointer instead of the model.
 
     Cloning without git-lfs leaves ~130-byte text pointers in models/, which
@@ -140,7 +143,7 @@ def _coerce_by_mask(text, letter_positions):
     return "".join(chars)
 
 
-def correct_plate_format(text):
+def correct_plate_format(text: str) -> str:
     """
     Apply Vietnamese plate-format constraints after OCR.
 
@@ -171,7 +174,7 @@ class LPRPipeline:
     Unified License Plate Recognition Pipeline.
     """
 
-    def __init__(self, models_dir=None):
+    def __init__(self, models_dir: str | None = None) -> None:
         self.yolo_model = None
         self.yolo_model_path = None
         self.svm_model = None
@@ -184,7 +187,7 @@ class LPRPipeline:
         if models_dir and os.path.exists(models_dir):
             self.load_svm_models(models_dir)
 
-    def load_svm_models(self, models_dir):
+    def load_svm_models(self, models_dir: str) -> None:
         """Loads a saved OCR classifier, scaler, and metadata."""
         classifier_path = os.path.join(models_dir, "classifier.joblib")
         scaler_path = os.path.join(models_dir, "scaler.joblib")
@@ -215,7 +218,9 @@ class LPRPipeline:
         else:
             print(f"Model files not found in {models_dir}")
 
-    def set_ocr_model(self, classifier, scaler, metadata=None):
+    def set_ocr_model(
+        self, classifier: Any, scaler: Any, metadata: dict | None = None
+    ) -> None:
         """Installs an already-loaded OCR classifier + scaler (local or MLflow)."""
         metadata = metadata or {}
         self.svm_model = classifier
@@ -239,7 +244,7 @@ class LPRPipeline:
         if self.feature_method == "hog" and n_features == 324:
             self.feature_method = "hog_legacy"
 
-    def load_yolo_model(self, yolo_model_path):
+    def load_yolo_model(self, yolo_model_path: str) -> None:
         """Loads the YOLOv8 model for detection."""
         if YOLO is None:
             print("ultralytics not installed; YOLO detection disabled")
@@ -524,8 +529,12 @@ class LPRPipeline:
         return candidate.get("format_score", 0.0) < 10.0
 
     def recognize(
-        self, image, yolo_model_path=None, assume_plate_crop=False, verbose=True
-    ):
+        self,
+        image: np.ndarray,
+        yolo_model_path: str | None = None,
+        assume_plate_crop: bool = False,
+        verbose: bool = True,
+    ) -> dict[str, Any]:
         """
         Runs the End-to-End LPR Pipeline.
 

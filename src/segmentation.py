@@ -4,8 +4,14 @@
 # This module is responsible for preprocessing the plate crop,
 # splitting two-line plates, and segmenting/extracting characters.
 
+from __future__ import annotations
+
+from typing import Any
 import cv2
 import numpy as np
+
+# A segmented character: {"img": np.ndarray, "bbox": (x, y, w, h), ...}
+CharInfo = dict[str, Any]
 
 
 def _to_gray(plate_img):
@@ -92,7 +98,9 @@ def _binary_component_score(binary_img):
     return count_score + area_score + fill_score - huge_penalty - edge_penalty
 
 
-def preprocess_plate_candidates(plate_img):
+def preprocess_plate_candidates(
+    plate_img: np.ndarray,
+) -> tuple[np.ndarray, list[tuple[str, np.ndarray, float]]]:
     """
     Build several binary versions of a plate crop and rank them.
 
@@ -179,7 +187,7 @@ def preprocess_plate_candidates(plate_img):
     return gray, candidates
 
 
-def preprocess_plate(plate_img):
+def preprocess_plate(plate_img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Tiền xử lý ảnh biển số: grayscale + binarize.
 
@@ -196,7 +204,7 @@ def preprocess_plate(plate_img):
     return gray, binary
 
 
-def preprocess_plate_legacy(plate_img):
+def preprocess_plate_legacy(plate_img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Original Otsu polarity heuristic. Kept as the primary path because it is
     stable on clean white plates; the richer candidate search is a fallback.
@@ -230,7 +238,7 @@ def preprocess_plate_legacy(plate_img):
     return gray, _close_binary(binary)
 
 
-def split_two_lines(binary):
+def split_two_lines(binary: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Tách biển 2-dòng thành 2 phần dựa trên horizontal projection.
 
@@ -253,11 +261,11 @@ def split_two_lines(binary):
 
 
 def segment_characters(
-    binary_line,
-    char_min_width_ratio=0.02,
-    char_max_width_ratio=0.3,
-    char_min_height_ratio=0.3,
-):
+    binary_line: np.ndarray,
+    char_min_width_ratio: float = 0.02,
+    char_max_width_ratio: float = 0.3,
+    char_min_height_ratio: float = 0.3,
+) -> list[CharInfo]:
     """
     Tách ký tự khỏi một dòng (binary image) bằng connected components.
 
@@ -295,8 +303,11 @@ def segment_characters(
 
 
 def segment_characters_by_projection(
-    binary_line, min_width_ratio=0.012, max_width_ratio=0.18, min_height_ratio=0.28
-):
+    binary_line: np.ndarray,
+    min_width_ratio: float = 0.012,
+    max_width_ratio: float = 0.18,
+    min_height_ratio: float = 0.28,
+) -> list[CharInfo]:
     """
     Split a one-line plate by vertical projection.
 
@@ -348,7 +359,9 @@ def segment_characters_by_projection(
     return chars
 
 
-def crop_inner_plate(binary, margin_x=0.08, margin_y=0.08):
+def crop_inner_plate(
+    binary: np.ndarray, margin_x: float = 0.08, margin_y: float = 0.08
+) -> np.ndarray:
     """
     Remove a small plate border before character segmentation.
 
@@ -363,7 +376,7 @@ def crop_inner_plate(binary, margin_x=0.08, margin_y=0.08):
     return binary[my : h - my, mx : w - mx]
 
 
-def component_char_candidates(binary_img):
+def component_char_candidates(binary_img: np.ndarray) -> list[CharInfo]:
     """
     Extract character-like connected components from an inner plate region.
     """
@@ -408,7 +421,7 @@ def component_char_candidates(binary_img):
     return candidates
 
 
-def segment_two_line_components(binary_plate):
+def segment_two_line_components(binary_plate: np.ndarray) -> list[CharInfo]:
     """
     Segment two-line plates by clustering character candidates by vertical center.
     """
@@ -577,7 +590,9 @@ def _split_wide_candidate(binary_line, candidate, median_width):
     return [left, right]
 
 
-def split_wide_char_candidates(binary_line, chars, target_max=9):
+def split_wide_char_candidates(
+    binary_line: np.ndarray, chars: list[CharInfo], target_max: int = 9
+) -> list[CharInfo]:
     """
     Split over-wide character candidates before OCR.
 
@@ -707,7 +722,11 @@ def _merge_line_candidates(binary_line, candidates):
     return chars
 
 
-def segment_line_components(binary_line, y_offset=0, target_range=None):
+def segment_line_components(
+    binary_line: np.ndarray,
+    y_offset: int = 0,
+    target_range: tuple[int, int] | None = None,
+) -> list[CharInfo]:
     """
     Segment one text row using line-relative geometry.
     """
@@ -757,7 +776,9 @@ def segment_line_components(binary_line, y_offset=0, target_range=None):
     return adjusted
 
 
-def trim_outer_artifacts(chars, line_width, min_count=8):
+def trim_outer_artifacts(
+    chars: list[CharInfo], line_width: int, min_count: int = 8
+) -> list[CharInfo]:
     """
     Drop narrow outer fragments when segmentation returns too many characters.
     """
@@ -784,7 +805,9 @@ def trim_outer_artifacts(chars, line_width, min_count=8):
     return trimmed
 
 
-def resize_pad_char(char_img, size=32, pad_ratio=0.15):
+def resize_pad_char(
+    char_img: np.ndarray, size: int = 32, pad_ratio: float = 0.15
+) -> np.ndarray:
     """
     Resize ký tự về kích thước (size x size) với padding để giữ aspect ratio.
 
@@ -882,7 +905,9 @@ def _segmentation_score(binary, chars, plate_type, binary_score):
     return score
 
 
-def segment_plate(plate_img, plate_type):
+def segment_plate(
+    plate_img: np.ndarray, plate_type: str
+) -> tuple[list[np.ndarray], list[CharInfo], np.ndarray]:
     """
     End-to-end character segmentation cho một plate.
 
