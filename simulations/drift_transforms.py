@@ -17,7 +17,9 @@ def brightness(img: np.ndarray, factor: float, **kwargs) -> np.ndarray:
     return np.clip(img.astype(np.float32) * float(factor), 0, 255).astype(np.uint8)
 
 
-def gaussian_noise(img: np.ndarray, sigma: float = 10.0, rng: random.Random = None, **kwargs) -> np.ndarray:
+def gaussian_noise(
+    img: np.ndarray, sigma: float = 10.0, rng: random.Random = None, **kwargs
+) -> np.ndarray:
     """Adds zero-mean Gaussian sensor noise."""
     seed = rng.randint(0, 2**31 - 1) if rng else 42
     np_rng = np.random.default_rng(seed)
@@ -46,12 +48,16 @@ def downscale(img: np.ndarray, factor: float = 0.5, **kwargs) -> np.ndarray:
 def jpeg(img: np.ndarray, quality: int = 30, **kwargs) -> np.ndarray:
     """Simulates lossy JPEG compression artifacts."""
     q = max(5, min(100, int(quality)))
-    _, encoded = cv2.imencode(".jpg", cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [int(cv2.IMWRITE_JPEG_QUALITY), q])
+    _, encoded = cv2.imencode(
+        ".jpg", cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [int(cv2.IMWRITE_JPEG_QUALITY), q]
+    )
     decoded = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
     return cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB)
 
 
-def rotate(img: np.ndarray, max_deg: float = 15.0, rng: random.Random = None, **kwargs) -> np.ndarray:
+def rotate(
+    img: np.ndarray, max_deg: float = 15.0, rng: random.Random = None, **kwargs
+) -> np.ndarray:
     """Applies arbitrary in-plane rotation simulating tilted mounting."""
     angle = rng.uniform(-max_deg, max_deg) if rng else max_deg
     h, w = img.shape[:2]
@@ -59,7 +65,9 @@ def rotate(img: np.ndarray, max_deg: float = 15.0, rng: random.Random = None, **
     return cv2.warpAffine(img, m, (w, h), borderMode=cv2.BORDER_REPLICATE)
 
 
-def occlusion(img: np.ndarray, frac: float = 0.3, rng: random.Random = None, **kwargs) -> np.ndarray:
+def occlusion(
+    img: np.ndarray, frac: float = 0.3, rng: random.Random = None, **kwargs
+) -> np.ndarray:
     """Paints a solid dark or noisy patch over part of the plate."""
     h, w = img.shape[:2]
     patch_w = max(4, int(w * frac))
@@ -84,13 +92,17 @@ TRANSFORMS = {
 }
 
 
-def apply_pipeline(img: np.ndarray, specs: list[dict[str, Any]], rng: random.Random = None) -> np.ndarray:
+def apply_pipeline(
+    img: np.ndarray, specs: list[dict[str, Any]], rng: random.Random = None
+) -> np.ndarray:
     """Sequentially applies transform specifications."""
     cur = img
     for spec in specs:
         name = spec.get("name")
         if name not in TRANSFORMS:
-            raise ValueError(f"Unknown transform: '{name}'. Available: {list(TRANSFORMS.keys())}")
+            raise ValueError(
+                f"Unknown transform: '{name}'. Available: {list(TRANSFORMS.keys())}"
+            )
         fn = TRANSFORMS[name]
         params = {k: v for k, v in spec.items() if k != "name"}
         cur = fn(cur, rng=rng, **params)

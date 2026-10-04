@@ -198,7 +198,9 @@ def lpr_training_pipeline():
         mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
         dag_run = context.get("dag_run")
-        trigger_reason = (dag_run.conf or {}).get("reason", "scheduled") if dag_run else "scheduled"
+        trigger_reason = (
+            (dag_run.conf or {}).get("reason", "scheduled") if dag_run else "scheduled"
+        )
 
         with mlflow.start_run(run_name=f"lpr-ocr-{ds}") as run:
             mlflow.set_tag("trigger_reason", trigger_reason)
