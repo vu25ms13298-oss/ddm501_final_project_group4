@@ -1,0 +1,10 @@
+image,label,plate_crop,confidence,note
+dataset/images/train/Dieu_0001.png,51A4032,false,high,blue plate (white text); same vehicle as Dieu_0002
+dataset/images/train/Dieu_0002.png,51A4032,false,high,blue plate (white text); same vehicle as Dieu_0001
+dataset/images/val/Dieu_0003.png,50E11297,false,high,yellow plate; same vehicle as Dieu_0004
+dataset/images/train/Dieu_0004.png,50E11297,false,high,yellow plate; second small plate in image ignored
+dataset/images/val/Dieu_0005.png,51B03271,false,medium,yellow plate; blurry (52 px wide); same vehicle as Dieu_0006
+dataset/images/train/Dieu_0006.png,51B03271,false,high,yellow plate
+dataset/images/train/Dieu_0007.png,62H76356,false,high,motorbike plate 62-H7; second small plate ignored
+dataset/images/train/Dieu_0008.png,62A25781,false,high,white plate
+dataset/images/val/Dieu_0017.png,51K36443,false,high,white plate
