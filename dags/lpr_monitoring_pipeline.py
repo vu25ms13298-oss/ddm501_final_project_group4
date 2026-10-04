@@ -134,6 +134,7 @@ def lpr_monitoring_pipeline():
             from scripts.generate_synthetic_plates import random_plate, render_plate
             import random
             import cv2
+
             _, lines = random_plate(random.Random(42), two_line=False)
             img_rgb = render_plate(lines)
             _, buf = cv2.imencode(".png", cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR))

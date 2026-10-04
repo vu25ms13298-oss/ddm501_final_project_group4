@@ -210,9 +210,7 @@ def lpr_training_pipeline():
 
             clf = SVC(kernel="rbf", C=10, gamma="scale", random_state=SEED)
 
-            cv_scores = cross_val_score(
-                clf, X_train_s, y_train, cv=3, scoring="f1_macro"
-            )
+            cv_scores = cross_val_score(clf, X_train_s, y_train, cv=3, scoring="f1_macro")
             mlflow.log_metric("cv_mean_f1", round(float(cv_scores.mean()), 4))
             mlflow.log_metric("cv_std_f1", round(float(cv_scores.std()), 4))
             log.info("CV F1: %.4f ± %.4f", cv_scores.mean(), cv_scores.std())
@@ -294,14 +292,10 @@ def lpr_training_pipeline():
         client = mlflow.MlflowClient()
         champion_acc = None
         try:
-            champion = client.get_model_version_by_alias(
-                REGISTERED_MODEL_NAME, PRODUCTION_ALIAS
-            )
+            champion = client.get_model_version_by_alias(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
             champion_acc = client.get_run(champion.run_id).data.metrics.get("accuracy")
         except Exception:
-            log.info(
-                "No current @%s model; this run becomes champion", PRODUCTION_ALIAS
-            )
+            log.info("No current @%s model; this run becomes champion", PRODUCTION_ALIAS)
         promote = champion_acc is None or accuracy >= champion_acc
 
         metadata = {

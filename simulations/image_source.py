@@ -64,7 +64,7 @@ def build_synthetic_pool(n: int = 40, seed: int = 42, scene_fraction: float = 0.
     rng = random.Random(seed)
     samples = []
     for i in range(n):
-        two_line = (i % 3 == 2)
+        two_line = i % 3 == 2
         label, lines = random_plate(rng, two_line=two_line)
         try:
             plate_rgb = render_plate(lines)
@@ -72,7 +72,7 @@ def build_synthetic_pool(n: int = 40, seed: int = 42, scene_fraction: float = 0.
             log.warning("TrueType fonts not found; synthetic plate generation skipped")
             break
         plate_degraded = degrade(plate_rgb, rng)
-        in_scene = (rng.random() < scene_fraction)
+        in_scene = rng.random() < scene_fraction
         if in_scene:
             final_img = place_in_scene(plate_degraded, rng)
             is_crop = False

@@ -38,17 +38,26 @@ def banner(title: str, subtitle: str = ""):
 
 
 def scenario_1_normal():
-    banner("Scenario 1: Normal Daytime Traffic", "Simulates steady, high-quality camera captures (100 reqs)")
+    banner(
+        "Scenario 1: Normal Daytime Traffic",
+        "Simulates steady, high-quality camera captures (100 reqs)",
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
     sim.run_simulation(n_requests=100, scenario="normal", rps=0.8, concurrency=2)
     sim.print_summary()
-    print(f"{Fore.GREEN}✓ Observe Grafana: RPS ~ 0.8, P95 < 500ms, Success Rate ~ 100%, No Alerts firing.{Style.RESET_ALL}")
+    print(
+        f"{Fore.GREEN}✓ Observe Grafana: RPS ~ 0.8, P95 < 500ms, "
+        f"Success Rate ~ 100%, No Alerts firing.{Style.RESET_ALL}"
+    )
 
 
 def scenario_2_nightfall():
-    banner("Scenario 2: Nightfall (Gradual Data Drift)", "Daylight transitions into twilight and severe night darkness")
+    banner(
+        "Scenario 2: Nightfall (Gradual Data Drift)",
+        "Daylight transitions into twilight and severe night darkness",
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
@@ -69,7 +78,10 @@ def scenario_2_nightfall():
 
 
 def scenario_3_camera_swap():
-    banner("Scenario 3: Camera Hardware Swap (Resolution Shift)", "Sudden transition from HD camera to low-res compressed feed")
+    banner(
+        "Scenario 3: Camera Hardware Swap (Resolution Shift)",
+        "Sudden transition from HD camera to low-res compressed feed",
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
@@ -87,7 +99,9 @@ def scenario_3_camera_swap():
 
 
 def scenario_4_weather_mix():
-    banner("Scenario 4: Adverse Weather Fluctuation", "Alternating rain, lens splatter and occlusion")
+    banner(
+        "Scenario 4: Adverse Weather Fluctuation", "Alternating rain, lens splatter and occlusion"
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
@@ -98,11 +112,17 @@ def scenario_4_weather_mix():
         sim.run_simulation(n_requests=count, scenario=sc, rps=0.8)
 
     sim.print_summary()
-    print(f"{Fore.GREEN}✓ Observe Grafana: 'Characters Detected per Plate' and format scores dip during rain/occlusion.{Style.RESET_ALL}")
+    print(
+        f"{Fore.GREEN}✓ Observe Grafana: 'Characters Detected per Plate' "
+        f"and format scores dip during rain/occlusion.{Style.RESET_ALL}"
+    )
 
 
 def scenario_5_prediction_drift():
-    banner("Scenario 5: Prediction / Concept Drift", "Camera aimed at scenery with no vehicles, degrading plate format scores")
+    banner(
+        "Scenario 5: Prediction / Concept Drift",
+        "Camera aimed at scenery with no vehicles, degrading plate format scores",
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
@@ -120,13 +140,18 @@ def scenario_5_prediction_drift():
 
 
 def scenario_6_rate_limit_spike():
-    banner("Scenario 6: Traffic Spike & Rate Limiting", "Fires rapid requests exceeding 60 req/min to trigger HTTP 429")
+    banner(
+        "Scenario 6: Traffic Spike & Rate Limiting",
+        "Fires rapid requests exceeding 60 req/min to trigger HTTP 429",
+    )
     sim = LPRTrafficSimulator()
     if not sim.check_api_health():
         return
 
     print(f"{Fore.YELLOW}Blasting 70 requests across 4 workers with no backoff...{Style.RESET_ALL}")
-    sim.run_simulation(n_requests=70, scenario="normal", rps=10.0, concurrency=4, respect_rate_limit=False)
+    sim.run_simulation(
+        n_requests=70, scenario="normal", rps=10.0, concurrency=4, respect_rate_limit=False
+    )
 
     sim.print_summary()
     print(f"{Fore.GREEN}✓ Observe Grafana & Prometheus:{Style.RESET_ALL}")
@@ -146,7 +171,10 @@ def scenario_7_bad_inputs():
     sim.run_simulation(n_requests=20, scenario="normal", rps=0.8)
 
     sim.print_summary()
-    print(f"{Fore.GREEN}✓ Observe Grafana: Panel 'Prediction Errors' logs empty_file, invalid_image, payload_too_large.{Style.RESET_ALL}")
+    print(
+        f"{Fore.GREEN}✓ Observe Grafana: Panel 'Prediction Errors' "
+        f"logs empty_file, invalid_image, payload_too_large.{Style.RESET_ALL}"
+    )
 
 
 SCENARIOS = {
@@ -162,7 +190,13 @@ SCENARIOS = {
 
 def main():
     p = argparse.ArgumentParser(description="Run ready-made LPR simulation scenarios")
-    p.add_argument("scenario", type=int, nargs="?", choices=list(SCENARIOS.keys()), help="Scenario number 1-7 (omit to run all)")
+    p.add_argument(
+        "scenario",
+        type=int,
+        nargs="?",
+        choices=list(SCENARIOS.keys()),
+        help="Scenario number 1-7 (omit to run all)",
+    )
     args = p.parse_args()
 
     if args.scenario:

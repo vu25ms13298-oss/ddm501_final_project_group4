@@ -172,7 +172,5 @@ def format_summary(report: dict) -> str:
     lines.append(f"healthy        : {evaluation.get('healthy')}")
     lines.append(f"drift_detected : {evaluation.get('drift_detected')}")
     for v in evaluation.get("violations", []):
-        lines.append(
-            f"  VIOLATION {v['metric']}={v['value']} (threshold {v['threshold']})"
-        )
+        lines.append(f"  VIOLATION {v['metric']}={v['value']} (threshold {v['threshold']})")
     return "\n".join(lines)

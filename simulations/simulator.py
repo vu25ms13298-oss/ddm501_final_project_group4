@@ -87,7 +87,10 @@ class LPRTrafficSimulator:
             version = info.get("model_version") or "baked-in"
             yolo = "YOLOv8" if info.get("yolo_loaded") else "Contour fallback"
 
-            print(f"{Fore.GREEN}✓ API is {status} | Model: {source} (v{version}) | Detector: {yolo}{Style.RESET_ALL}")
+            print(
+                f"{Fore.GREEN}✓ API is {status} | Model: {source} (v{version}) | "
+                f"Detector: {yolo}{Style.RESET_ALL}"
+            )
             return loaded
         except Exception as exc:
             print(f"{Fore.RED}✗ Cannot connect to API at {self.health_url}: {exc}{Style.RESET_ALL}")
@@ -143,7 +146,12 @@ class LPRTrafficSimulator:
                     self.stats["format_valid"] += 1
                 if sample.label:
                     self.stats["labeled_count"] += 1
-                    pred_clean = (resp_json.get("plate_text") or "").replace("-", "").replace(".", "").upper()
+                    pred_clean = (
+                        (resp_json.get("plate_text") or "")
+                        .replace("-", "")
+                        .replace(".", "")
+                        .upper()
+                    )
                     target_clean = sample.label.replace("-", "").replace(".", "").upper()
                     if pred_clean == target_clean:
                         self.stats["exact_matches"] += 1
@@ -196,22 +204,36 @@ class LPRTrafficSimulator:
         pbar.close()
         return dict(self.stats)
 
-    def run_traffic_pattern(self, pattern: str = "burst", scenario: str = "normal", duration_s: int = 15):
+    def run_traffic_pattern(
+        self, pattern: str = "burst", scenario: str = "normal", duration_s: int = 15
+    ):
         """Runs traffic pattern (burst, ramp, or steady)."""
-        print(f"\n{Fore.CYAN}▶ Running traffic pattern: {pattern.upper()} (duration {duration_s}s){Style.RESET_ALL}")
+        print(
+            f"\n{Fore.CYAN}▶ Running traffic pattern: {pattern.upper()} "
+            f"(duration {duration_s}s){Style.RESET_ALL}"
+        )
         if pattern == "burst":
             # Fire rapid burst without pacing to trigger rate limit (429)
-            self.run_simulation(n_requests=35, scenario=scenario, rps=8.0, concurrency=4, respect_rate_limit=False)
+            self.run_simulation(
+                n_requests=35, scenario=scenario, rps=8.0, concurrency=4, respect_rate_limit=False
+            )
         elif pattern == "ramp":
             for rps in (0.5, 1.0, 2.0, 4.0):
                 print(f"  Ramping to {rps} RPS...")
-                self.run_simulation(n_requests=10, scenario=scenario, rps=rps, concurrency=2, show_progress=False)
+                self.run_simulation(
+                    n_requests=10, scenario=scenario, rps=rps, concurrency=2, show_progress=False
+                )
         else:
-            self.run_simulation(n_requests=int(duration_s * 0.8), scenario=scenario, rps=0.8, concurrency=2)
+            self.run_simulation(
+                n_requests=int(duration_s * 0.8), scenario=scenario, rps=0.8, concurrency=2
+            )
 
     def send_bad_requests(self, n: int = 10):
         """Sends deliberately malformed requests to populate error metrics."""
-        print(f"\n{Fore.YELLOW}▶ Sending {n} invalid payloads (empty, non-image, oversized)...{Style.RESET_ALL}")
+        print(
+            f"\n{Fore.YELLOW}▶ Sending {n} invalid payloads "
+            f"(empty, non-image, oversized)...{Style.RESET_ALL}"
+        )
         for i in range(n):
             mode = i % 3
             if mode == 0:
@@ -232,9 +254,17 @@ class LPRTrafficSimulator:
     def prometheus_snapshot(self) -> dict[str, Any]:
         """Queries Prometheus for instantaneous drift and health values."""
         queries = {
-            "success_rate_5m": 'sum(rate(plate_recognition_result_total{result="success"}[5m])) / sum(rate(plate_recognition_result_total[5m]))',
-            "brightness_mean_5m": "rate(input_image_brightness_sum[5m]) / rate(input_image_brightness_count[5m])",
-            "width_mean_5m": "rate(input_image_width_pixels_sum[5m]) / rate(input_image_width_pixels_count[5m])",
+            "success_rate_5m": (
+                'sum(rate(plate_recognition_result_total{result="success"}[5m])) / '
+                "sum(rate(plate_recognition_result_total[5m]))"
+            ),
+            "brightness_mean_5m": (
+                "rate(input_image_brightness_sum[5m]) / " "rate(input_image_brightness_count[5m])"
+            ),
+            "width_mean_5m": (
+                "rate(input_image_width_pixels_sum[5m]) / "
+                "rate(input_image_width_pixels_count[5m])"
+            ),
             "active_alerts": 'count(ALERTS{alertstate="firing"})',
         }
         res = {}
@@ -272,9 +302,12 @@ class LPRTrafficSimulator:
         print(f"Total Requests     : {total}")
         print(f"Success (200 OK)   : {Fore.GREEN}{s['success_2xx']}{Style.RESET_ALL}")
         print(f"Format Valid       : {Fore.GREEN}{s['format_valid']}{Style.RESET_ALL}")
-        print(f"Rate Limited (429) : {Fore.YELLOW if s['rate_limited_429'] else Fore.WHITE}{s['rate_limited_429']}{Style.RESET_ALL}")
-        print(f"Client Errors (4xx): {Fore.YELLOW if s['error_4xx'] else Fore.WHITE}{s['error_4xx']}{Style.RESET_ALL}")
-        print(f"Server Errors (5xx): {Fore.RED if s['error_5xx'] else Fore.WHITE}{s['error_5xx']}{Style.RESET_ALL}")
+        color_429 = Fore.YELLOW if s["rate_limited_429"] else Fore.WHITE
+        color_4xx = Fore.YELLOW if s["error_4xx"] else Fore.WHITE
+        color_5xx = Fore.RED if s["error_5xx"] else Fore.WHITE
+        print(f"Rate Limited (429) : {color_429}{s['rate_limited_429']}{Style.RESET_ALL}")
+        print(f"Client Errors (4xx): {color_4xx}{s['error_4xx']}{Style.RESET_ALL}")
+        print(f"Server Errors (5xx): {color_5xx}{s['error_5xx']}{Style.RESET_ALL}")
         print(f"Latency P50 / P95  : {p50} ms / {p95} ms")
         print(f"Plate Exact Match  : {acc_str}")
 

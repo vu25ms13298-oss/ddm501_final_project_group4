@@ -73,7 +73,7 @@ def test_format_summary():
 
 
 def test_airflow_dag_loads_cleanly():
-    airflow = pytest.importorskip("airflow")
+    pytest.importorskip("airflow")
     from airflow.models import DagBag
 
     dagbag = DagBag(dag_folder="dags", include_examples=False)
