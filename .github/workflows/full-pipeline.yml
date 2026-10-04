@@ -19,8 +19,8 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install ruff==0.16.9 black==25.9.0
-      - run: ruff check src/ api/ scripts/ tests/ responsible_ai/
-      - run: black --check src/ api/ scripts/ tests/ responsible_ai/
+      - run: ruff check src/ api/ scripts/ tests/ responsible_ai/ simulations/ dags/
+      - run: black --check src/ api/ scripts/ tests/ responsible_ai/ simulations/ dags/
 
   test:
     name: Run Tests
@@ -59,8 +59,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/lfs-pull
       - run: docker compose config --quiet
-      - run: docker build -f mlflow/Dockerfile -t lpr-mlflow:test .
       - run: docker build -f api/Dockerfile -t lpr-api:test .
+      - run: docker build -f docker/mlflow/Dockerfile -t lpr-mlflow:test .
+      - run: docker build -f docker/airflow/Dockerfile -t lpr-airflow:test .
+      - run: docker build -f trainer/Dockerfile -t lpr-trainer:test .
 
   deploy:
     name: Deploy (Push Docker Images)
@@ -83,6 +85,6 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/lpr-api:${{ github.sha }}
       - name: Build and push MLflow image
         run: |
-          docker build -f mlflow/Dockerfile -t ghcr.io/${{ github.repository }}/lpr-mlflow:latest -t ghcr.io/${{ github.repository }}/lpr-mlflow:${{ github.sha }} .
+          docker build -f docker/mlflow/Dockerfile -t ghcr.io/${{ github.repository }}/lpr-mlflow:latest -t ghcr.io/${{ github.repository }}/lpr-mlflow:${{ github.sha }} .
           docker push ghcr.io/${{ github.repository }}/lpr-mlflow:latest
           docker push ghcr.io/${{ github.repository }}/lpr-mlflow:${{ github.sha }}
